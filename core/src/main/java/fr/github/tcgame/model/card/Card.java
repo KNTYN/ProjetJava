@@ -28,4 +28,5 @@ public class Card {
 
     public String getName() { return name; }
     public int getHp() { return hp; }
+    public int getCost() { return cost;}
 }
