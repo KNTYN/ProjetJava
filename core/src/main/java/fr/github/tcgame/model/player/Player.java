@@ -90,6 +90,40 @@ public class Player {
         return true;
     }
 
-    //Methodes mana
+    //Methodes Mana
+
+    public void gainMana(int amount){
+        mana = Math.min(MAX_MANA, mana+amount);
+    }
+
+    public boolean spendMana(int amount){
+        if (mana<amount) return false;
+        mana -= amount;
+        return true;
+    }
+
+    //Methodes Coins
+
+    public void gainCoins(int amount){
+        coins += amount;
+    }
+
+    public boolean spendCoins(int amount){
+        if(coins < amount) return false;
+        coins -= amount;
+        return true;
+    }
+
+    public void loseHalfCoins(){
+        coins = coins / 2;
+    }
+
+    //Methodes des effets temporaires
+    public void setCannotDraw(boolean value)        { this.cannotDraw = value; }
+    public boolean cannotDraw()                     { return cannotDraw; }
+
+    public void applyReduceDeployCost(int reduction){ this.reducedDeployCost = reduction; }
+
+
 
 }
