@@ -20,7 +20,7 @@ public class MenuController {
         menuManager.changeMenu(Menu.TypeMenu.QUIT);
     }
     public void playMusic(){
-        System.out.println("MUSIQUIEUIEUEUEUEU");
+        System.out.println("MESSAGE TEST");
     }
 
 }
