@@ -1,7 +1,5 @@
 # TCGame
 
-Ok, je mets **tout propre en Markdown avec des `##` / `###` partout**, sans changer ton contenu 👇
-
 ---
 
 # 🎮 Règles de jeu complètes
