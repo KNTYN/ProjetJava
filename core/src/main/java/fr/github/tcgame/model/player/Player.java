@@ -102,6 +102,10 @@ public class Player {
         return true;
     }
 
+    public void halveMana() {
+        mana = mana / 2;
+    }
+
     //Methodes Coins
 
     public void gainCoins(int amount){
@@ -118,12 +122,35 @@ public class Player {
         coins = coins / 2;
     }
 
+    //Shuffle
+    public void clearAll() {
+        hand.clear();
+        bench.clear();
+        activeCard = null;
+    }
+
     //Methodes des effets temporaires
     public void setCannotDraw(boolean value)        { this.cannotDraw = value; }
     public boolean cannotDraw()                     { return cannotDraw; }
 
     public void applyReduceDeployCost(int reduction){ this.reducedDeployCost = reduction; }
 
+    // --- Getters ---
+
+    public String getName()        { return name; }
+    public Crystal getCrystal()    { return crystal; }
+    public List<Card> getHand()    { return hand; }
+    public List<Card> getBench()   { return bench; }
+    public Card getActiveCard()    { return activeCard; }
+    public boolean hasActiveCard() { return activeCard != null; }
+    public int getMana()           { return mana; }
+    public int getCoins()          { return coins; }
+
+    @Override
+    public String toString() {
+        return String.format("%s | %s | Mana:%d/%d | Pieces:%d | Banc:%d | Main:%d cartes",
+            name, crystal, mana, MAX_MANA, coins, bench.size(), hand.size());
+    }
 
 
 }
