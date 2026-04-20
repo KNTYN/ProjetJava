@@ -18,7 +18,7 @@ public class Crystal {
         currentHp=Math.min(MAX_HP,currentHp+amount);
     }
 
-    public boolean isDestoyed(){
+    public boolean isDestroyed(){
         return currentHp<=0;
     }
 
@@ -29,6 +29,5 @@ public class Crystal {
     public String toString(){
         return String.format("Cristal [%d/%d PV]", currentHp, MAX_HP);
     }
-
 
 }

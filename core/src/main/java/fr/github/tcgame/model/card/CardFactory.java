@@ -20,6 +20,8 @@ public class CardFactory {
                 AttackEffect.BONUS_COINS, 3)));
 
 
+        //AJOUTER LES AUTRES CARTES ICI
+
 
         // === SORTS ===
         cards.add(new Card("Shuffle",       "Rase tout le terrain, remelange tout.",             Card.Type.OBJET, Card.Family.SORT, 0, 2, null, null));

@@ -90,6 +90,9 @@ public class Player {
         return true;
     }
 
+    // Setter activeCard (utilise par GameModel pour remettre a null apres mort)
+    public void setActiveCard(Card card) { this.activeCard = card; }
+
     //Methodes Mana
 
     public void gainMana(int amount){

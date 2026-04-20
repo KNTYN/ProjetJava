@@ -13,6 +13,14 @@ public class Card {
     private int currentHp;
     private int cost;
 
+    //Effets carte
+    private boolean frozen;
+    private boolean hasAttackMiss;
+    private int missChance;
+    private boolean protectCrystal;
+    private boolean hasTrap;
+    private int poisonDamage;
+
     private Attack normalAtk;
     private Attack specialAtk;
 
@@ -62,10 +70,36 @@ public class Card {
     public String getCharTexturePath()  { return charTexturePath; }
 
 
-    //Statuts de combat
 
+    //Methodes effets
 
+    public void applyFreeze()             { this.frozen = true; }
+    public void clearFreeze()             { this.frozen = false; }
+    public boolean isFrozen()             { return frozen; }
 
+    public void applyMissChance(int pct)  { this.hasAttackMiss = true; this.missChance = pct; }
+    public void clearMissChance()         { this.hasAttackMiss = false; this.missChance = 0; }
+    public boolean hasAttackMiss()        { return hasAttackMiss; }
+    public int getMissChance()            { return missChance; }
+
+    public void applyProtectCrystal()     { this.protectCrystal = true; }
+    public void clearProtectCrystal()     { this.protectCrystal = false; }
+    public boolean isProtectingCrystal()  { return protectCrystal; }
+
+    public void setTrap(boolean trap)     { this.hasTrap = trap; }
+    public boolean hasTrap()              { return hasTrap; }
+
+    public void applyPoison(int dmgPerTurn) { this.poisonDamage = dmgPerTurn; }
+    public void clearPoison()               { this.poisonDamage = 0; }
+    public int getPoisonDamage()            { return poisonDamage; }
+
+    public void clearAllStatuses() {
+        clearFreeze();
+        clearMissChance();
+        clearProtectCrystal();
+        setTrap(false);
+        clearPoison();
+    }
 
 
     //Setters textures
