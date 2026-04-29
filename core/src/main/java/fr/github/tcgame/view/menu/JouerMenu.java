@@ -34,7 +34,7 @@ public class JouerMenu extends Menu {
 
         addMenuOption("SOLO", centreX, optY, () -> {
             if (clickSound != null) clickSound.play(volumeMaster * volumeEffets);
-            controller.goSolo();
+            controller.goGame();
         });
         addMenuOption("DUEL", centreX, optY - gap, () -> {
             if (clickSound != null) clickSound.play(volumeMaster * volumeEffets);

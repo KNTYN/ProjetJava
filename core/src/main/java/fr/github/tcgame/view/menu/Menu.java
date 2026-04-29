@@ -16,7 +16,11 @@ import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 import com.badlogic.gdx.utils.viewport.Viewport;
 import fr.github.tcgame.control.MenuController;
+
+
 import java.util.function.Consumer;
+
+import static fr.github.tcgame.view.game.GameView.*;
 
 public abstract class Menu {
     public static final float WIDTH  = 1280;
@@ -29,7 +33,7 @@ public abstract class Menu {
     protected Table root;
     protected MenuController controller;
 
-    public enum TypeMenu {SPLASH, MAIN, SELECTION, QUIT, JOUER, PARAMETRES, AUDIO, CONTROLES, COLLECTION}
+    public enum TypeMenu {SPLASH, MAIN, SELECTION, QUIT, JOUER, PARAMETRES, AUDIO, CONTROLES, COLLECTION,GAME}
     public TypeMenu typeMenu;
 
     protected static final Color OR_PALE   = new Color(0.76f, 0.67f, 0.49f, 1f);
@@ -222,5 +226,32 @@ public abstract class Menu {
             if (onChange != null) onChange.accept(textField.getText());
         });
         stage.addActor(field);
+    }
+
+    public void buildBoardZones() {
+        // 1. Définition des marges asymétriques (Réglage précis d'après ton image)
+        float margeGauche = 54f; // On augmente ici pour rétracter la ligne à gauche
+        float margeDroite = 43f; // Celle-ci était bonne à droite
+
+        // 2. Calcul de la largeur réelle de la ligne
+        // Largeur totale - (somme des deux marges)
+        float largeurLigne = WIDTH - (margeGauche + margeDroite);
+
+        // On crée le Pixmap avec la largeur exacte
+        Pixmap line = new Pixmap((int) largeurLigne, 2, Pixmap.Format.RGBA8888);
+        // Un noir un peu plus marqué pour bien voir le réglage
+        line.setColor(0, 0, 0, 0.8f);
+        line.fill();
+
+        Texture tex = new Texture(line);
+        Image lineImg = new Image(tex);
+        line.dispose();
+
+        // 3. Positionnement
+        // On commence à la coordonnée X de la marge de gauche
+        lineImg.setPosition(margeGauche, HEIGHT / 2f - 1);
+        lineImg.setSize(largeurLigne, 2);
+
+        stage.addActor(lineImg);
     }
 }

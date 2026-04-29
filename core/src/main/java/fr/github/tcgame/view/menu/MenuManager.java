@@ -2,6 +2,7 @@ package fr.github.tcgame.view.menu;
 
 import com.badlogic.gdx.Gdx;
 import fr.github.tcgame.control.MenuController;
+import fr.github.tcgame.view.game.GameView;
 
 public class MenuManager {
     private Menu actualMenu;
@@ -15,6 +16,7 @@ public class MenuManager {
     private QuitMenu quitMenu;
     private CollectionMenu collectionMenu;
     private MenuController controller;
+    private GameView gameView;
 
     public MenuManager() {
         controller = new MenuController(this);
@@ -59,6 +61,10 @@ public class MenuManager {
             case COLLECTION -> {
                 if (collectionMenu == null) { collectionMenu = new CollectionMenu(controller); }
                 actualMenu = collectionMenu;
+            }
+            case GAME -> {
+                if (gameView == null) { gameView = new GameView(controller); }
+                actualMenu = gameView;
             }
         }
         if (actualMenu != null) {

@@ -50,11 +50,13 @@ public class MenuController {
         menuManager.changeMenu(Menu.TypeMenu.COLLECTION);
     }
 
-    public void quit() {
-        menuManager.changeMenu(Menu.TypeMenu.QUIT);
-    }
+    public void quit() { menuManager.changeMenu(Menu.TypeMenu.QUIT);}
 
     public void playMusic() {
         System.out.println("MESSAGE TEST");
+    }
+
+    public void goGame() {
+        menuManager.changeMenu(Menu.TypeMenu.GAME);
     }
 }
