@@ -1,0 +1,119 @@
+.
+├── assets
+│   ├── assets.txt
+│   ├── audio
+│   │   ├── click.mp3
+│   │   ├── defeat.mp3
+│   │   ├── hover.mp3
+│   │   ├── ost_game.mp3
+│   │   ├── ost_main.mp3
+│   │   └── victory.mp3
+│   ├── fonts
+│   │   └── Cinzel-Regular.ttf
+│   ├── libgdx.png
+│   ├── placeholder
+│   │   ├── activeCard_Template.png
+│   │   ├── BG_GameView.png
+│   │   ├── BG_MainMenu.jpg
+│   │   ├── BG_QuitMenu.jpg
+│   │   ├── bouton.png
+│   │   └── Card_Template.png
+│   ├── test
+│   │   └── test.jpg
+│   └── ui
+│       ├── crystal_opponent.png
+│       ├── crystal_player.png
+│       ├── font.fnt
+│       ├── font-list.fnt
+│       ├── font-subtitle.fnt
+│       ├── font-window.fnt
+│       ├── gear.png
+│       ├── uiskin.atlas
+│       ├── uiskin.json
+│       └── uiskin.png
+├── build.gradle
+├── core
+│   ├── build.gradle
+│   └── src
+│       └── main
+│           └── java
+│               └── fr
+│                   └── github
+│                       └── tcgame
+│                           ├── control
+│                           │   └── MenuController.java
+│                           ├── model
+│                           │   ├── attack
+│                           │   │   ├── AttackEffect.java
+│                           │   │   └── Attack.java
+│                           │   ├── card
+│                           │   │   ├── CardFactory.java
+│                           │   │   └── Card.java
+│                           │   ├── deck
+│                           │   │   └── Deck.java
+│                           │   ├── GameModel.java
+│                           │   └── player
+│                           │       ├── Crystal.java
+│                           │       └── Player.java
+│                           └── view
+│                               ├── card
+│                               │   └── CardView.java
+│                               ├── game
+│                               │   ├── GameHUD.java
+│                               │   └── GameView.java
+│                               ├── MainGame.java
+│                               └── menu
+│                                   ├── AudioMenu.java
+│                                   ├── AudioPauseMenu.java
+│                                   ├── CollectionMenu.java
+│                                   ├── ControlesMenu.java
+│                                   ├── ControlesPauseMenu.java
+│                                   ├── JouerMenu.java
+│                                   ├── MainMenu.java
+│                                   ├── Menu.java
+│                                   ├── MenuManager.java
+│                                   ├── ParametresMenu.java
+│                                   ├── ParametresPauseMenu.java
+│                                   ├── PauseMenu.java
+│                                   ├── QuitGameMenu.java
+│                                   ├── QuitMenu.java
+│                                   ├── SelectionMenu.java
+│                                   └── SplashMenu.java
+├── .editorconfig
+├── .gitattributes
+├── .gitignore
+├── gradle
+│   ├── gradle-daemon-jvm.properties
+│   └── wrapper
+│       ├── gradle-wrapper.jar
+│       └── gradle-wrapper.properties
+├── gradle.properties
+├── gradlew
+├── gradlew.bat
+├── lwjgl3
+│   ├── build.gradle
+│   ├── icons
+│   │   ├── logo.icns
+│   │   ├── logo.ico
+│   │   └── logo.png
+│   ├── nativeimage.gradle
+│   └── src
+│       └── main
+│           ├── java
+│           │   └── fr
+│           │       └── github
+│           │           └── tcgame
+│           │               └── lwjgl3
+│           │                   ├── Lwjgl3Launcher.java
+│           │                   └── StartupHelper.java
+│           └── resources
+│               ├── libgdx128.png
+│               ├── libgdx16.png
+│               ├── libgdx32.png
+│               └── libgdx64.png
+├── projet_complet.txt
+├── README.md
+├── settings.gradle
+└── structure.txt
+
+36 directories, 81 files
