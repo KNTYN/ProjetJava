@@ -1,0 +1,4536 @@
+=== ./lwjgl3/src/main/java/fr/github/tcgame/lwjgl3/Lwjgl3Launcher.java ===
+package fr.github.tcgame.lwjgl3;
+
+import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
+import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
+import fr.github.tcgame.view.MainGame;
+
+/** Launches the desktop (LWJGL3) application. */
+public class Lwjgl3Launcher {
+    public static void main(String[] args) {
+        if (StartupHelper.startNewJvmIfRequired()) return; // This handles macOS support and helps on Windows.
+        createApplication();
+    }
+
+    private static Lwjgl3Application createApplication() {
+        return new Lwjgl3Application(new MainGame(), getDefaultConfiguration());
+    }
+
+    private static Lwjgl3ApplicationConfiguration getDefaultConfiguration() {
+        Lwjgl3ApplicationConfiguration configuration = new Lwjgl3ApplicationConfiguration();
+        configuration.setTitle("TCGame");
+        //// Vsync limits the frames per second to what your hardware can display, and helps eliminate
+        //// screen tearing. This setting doesn't always work on Linux, so the line after is a safeguard.
+        configuration.useVsync(true);
+        //// Limits FPS to the refresh rate of the currently active monitor, plus 1 to try to match fractional
+        //// refresh rates. The Vsync setting above should limit the actual FPS to match the monitor.
+        configuration.setForegroundFPS(Lwjgl3ApplicationConfiguration.getDisplayMode().refreshRate + 1);
+        //// If you remove the above line and set Vsync to false, you can get unlimited FPS, which can be
+        //// useful for testing performance, but can also be very stressful to some hardware.
+        //// You may also need to configure GPU drivers to fully disable Vsync; this can cause screen tearing.
+
+        var mode = Lwjgl3ApplicationConfiguration.getDisplayMode();
+        configuration.setWindowedMode(mode.width, mode.height);
+        //// You can change these files; they are in lwjgl3/src/main/resources/ .
+        //// They can also be loaded from the root of assets/ .
+        configuration.setWindowIcon("libgdx128.png", "libgdx64.png", "libgdx32.png", "libgdx16.png");
+        configuration.setResizable(false);
+        configuration.setDecorated(false);
+        //// This could improve compatibility with Windows machines with buggy OpenGL drivers, Macs
+        //// with Apple Silicon that have to emulate compatibility with OpenGL anyway, and more.
+        //// This uses the dependency `com.badlogicgames.gdx:gdx-lwjgl3-angle` to function.
+        //// You would need to add this line to lwjgl3/build.gradle , below the dependency on `gdx-backend-lwjgl3`:
+        ////     implementation "com.badlogicgames.gdx:gdx-lwjgl3-angle:$gdxVersion"
+        //// You can choose to add the following line and the mentioned dependency if you want; they
+        //// are not intended for games that use GL30 (which is compatibility with OpenGL ES 3.0).
+        //// Know that it might not work well in some cases.
+//        configuration.setOpenGLEmulation(Lwjgl3ApplicationConfiguration.GLEmulation.ANGLE_GLES20, 0, 0);
+
+        return configuration;
+    }
+}
+=== ./lwjgl3/src/main/java/fr/github/tcgame/lwjgl3/StartupHelper.java ===
+/*
+ * Copyright 2020 damios
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at:
+ * https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+// Note, the above license and copyright applies to this file only.
+package fr.github.tcgame.lwjgl3;
+
+import com.badlogic.gdx.Version;
+import com.badlogic.gdx.backends.lwjgl3.Lwjgl3NativesLoader;
+
+import org.lwjgl.system.JNI;
+import org.lwjgl.system.linux.UNISTD;
+import org.lwjgl.system.macosx.LibC;
+import org.lwjgl.system.macosx.ObjCRuntime;
+
+import java.io.File;
+import java.lang.management.ManagementFactory;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+
+/**
+ * A helper object for game startup, featuring three utilities related to LWJGL3 on various operating systems.
+ * <p>
+ * The utilities are as follows:
+ * <ul>
+ *  <li> Windows: Prevents a common crash related to LWJGL3's extraction of shared library files.</li>
+ *  <li> macOS: Spawns a child JVM process with {@code -XstartOnFirstThread} in the JVM args (if it was not already).
+ *  This is required for LWJGL3 to work on macOS.</li>
+ *  <li> Linux (NVIDIA GPUs only): Spawns a child JVM process with the {@code __GL_THREADED_OPTIMIZATIONS}
+ *  {@link System#getenv(String) Environment Variable} set to {@code 0} (if it was not already). This is required for
+ *  LWJGL3 to work on Linux with NVIDIA GPUs.</li>
+ * </ul>
+ * <a href="https://jvm-gaming.org/t/starting-jvm-on-mac-with-xstartonfirstthread-programmatically/57547">Based on this java-gaming.org post by kappa</a>
+ * @author damios
+ */
+public class StartupHelper {
+
+	private StartupHelper() {}
+
+	private static final String JVM_RESTARTED_ARG = "jvmIsRestarted";
+
+	/**
+	 * Must only be called on Linux. Check OS first (or use short-circuit evaluation)!
+	 * @return whether NVIDIA drivers are present on Linux.
+	 */
+	public static boolean isLinuxNvidia() {
+		String[] drivers = new File("/proc/driver").list(
+			(dir, path) -> path.toUpperCase(Locale.ROOT).contains("NVIDIA")
+		);
+		if (drivers == null) return false;
+		return drivers.length > 0;
+	}
+
+	/**
+	 * Applies the utilities as described by {@link StartupHelper}'s Javadoc.
+	 * <p>
+	 * All {@link System#getenv() Environment Variables} are copied to the child JVM process (if it is spawned), as
+	 * specified by {@link ProcessBuilder#environment()}; the same applies for
+	 * {@link System#getProperties() System Properties}.
+	 * <p>
+	 * <b>Usage:</b>
+	 * <pre><code>
+	 * public static void main(String[] args) {
+	 * 	 if (StartupHelper.startNewJvmIfRequired()) return;
+	 * 	 // ... The rest of main() goes here, as normal.
+	 * }
+	 * </code></pre>
+	 * @return whether a child JVM process was spawned or not.
+	 */
+	public static boolean startNewJvmIfRequired() {
+		return startNewJvmIfRequired(true);
+	}
+
+	/**
+	 * Applies the utilities as described by {@link StartupHelper}'s Javadoc.
+	 * <p>
+	 * All {@link System#getenv() Environment Variables} are copied to the child JVM process (if it is spawned), as
+	 * specified by {@link ProcessBuilder#environment()}; the same applies for
+	 * {@link System#getProperties() System Properties}.
+	 * <p>
+	 * <b>Usage:</b>
+	 * <pre><code>
+	 * public static void main(String[] args) {
+	 *   // The parameter on the next line could instead be false if you don't want to inherit IO.
+	 * 	 if (StartupHelper.startNewJvmIfRequired(true)) return;
+	 * 	 // ... The rest of main() goes here, as normal.
+	 * }
+	 * </code></pre>
+	 * @param inheritIO whether I/O should be inherited in the child JVM process. Please note that enabling this will
+	 *                  block the thread until the child JVM process stops executing.
+	 * @return whether a child JVM process was spawned or not.
+	 */
+	public static boolean startNewJvmIfRequired(boolean inheritIO) {
+		String osName = System.getProperty("os.name").toLowerCase(Locale.ROOT);
+		if (osName.contains("mac")) return startNewJvm0(/*isMac =*/ true, inheritIO);
+		if (osName.contains("windows")) {
+			// Here, we are trying to work around an issue with how LWJGL3 loads its extracted .dll files.
+			// By default, LWJGL3 extracts to the directory specified by "java.io.tmpdir": usually, the user's home.
+			// If the user's name has non-ASCII (or some non-alphanumeric) characters in it, that would fail.
+			// By extracting to the relevant "ProgramData" folder, which is usually "C:\ProgramData", we avoid this.
+			// We also temporarily change the "user.name" property to one without any chars that would be invalid.
+			// We revert our changes immediately after loading LWJGL3 natives.
+			String programData = System.getenv("ProgramData");
+			if (programData == null) programData = "C:\\Temp"; // if ProgramData isn't set, try some fallback.
+			String prevTmpDir = System.getProperty("java.io.tmpdir", programData);
+			String prevUser = System.getProperty("user.name", "libGDX_User");
+			System.setProperty("java.io.tmpdir", programData + "\\libGDX-temp");
+			System.setProperty(
+				"user.name",
+				("User_" + prevUser.hashCode() + "_GDX" + Version.VERSION).replace('.', '_')
+			);
+			Lwjgl3NativesLoader.load();
+			System.setProperty("java.io.tmpdir", prevTmpDir);
+			System.setProperty("user.name", prevUser);
+			return false;
+		}
+		return startNewJvm0(/*isMac =*/ false, inheritIO);
+	}
+
+	private static final String MAC_JRE_ERR_MSG = "A Java installation could not be found. If you are distributing this app with a bundled JRE, be sure to set the '-XstartOnFirstThread' argument manually!";
+	private static final String LINUX_JRE_ERR_MSG = "A Java installation could not be found. If you are distributing this app with a bundled JRE, be sure to set the environment variable '__GL_THREADED_OPTIMIZATIONS' to '0'!";
+	private static final String CHILD_LOOP_ERR_MSG = "The current JVM process is a spawned child JVM process, but StartupHelper has attempted to spawn another child JVM process! This is a broken state, and should not normally happen! Your game may crash or not function properly!";
+
+	/**
+	 * Spawns a child JVM process if on macOS, or on Linux with NVIDIA drivers.
+	 * <p>
+	 * All {@link System#getenv() Environment Variables} are copied to the child JVM process (if it is spawned), as
+	 * specified by {@link ProcessBuilder#environment()}; the same applies for
+	 * {@link System#getProperties() System Properties}.
+	 * @param isMac whether the current OS is macOS. If this is `false` then the current OS is assumed to be Linux (and
+	 *             an immediate check for NVIDIA drivers is performed).
+	 * @param inheritIO whether I/O should be inherited in the child JVM process. Please note that enabling this will
+	 *                 block the thread until the child JVM process stops executing.
+	 * @return whether a child JVM process was spawned or not.
+	 */
+	public static boolean startNewJvm0(boolean isMac, boolean inheritIO) {
+		long processID = getProcessID(isMac);
+		if (!isMac) {
+			// No need to restart non-NVIDIA Linux
+			if (!isLinuxNvidia()) return false;
+			// check whether __GL_THREADED_OPTIMIZATIONS is already disabled
+			if ("0".equals(System.getenv("__GL_THREADED_OPTIMIZATIONS"))) return false;
+		} else {
+			// There is no need for -XstartOnFirstThread on Graal native image
+			if (!System.getProperty("org.graalvm.nativeimage.imagecode", "").isEmpty()) return false;
+
+			// Checks if we are already on the main thread, such as from running via Construo.
+			long objcMsgSend = ObjCRuntime.getLibrary().getFunctionAddress("objc_msgSend");
+			long nsThread = ObjCRuntime.objc_getClass("NSThread");
+			long currentThread = JNI.invokePPP(nsThread, ObjCRuntime.sel_getUid("currentThread"), objcMsgSend);
+			boolean isMainThread = JNI.invokePPZ(currentThread, ObjCRuntime.sel_getUid("isMainThread"), objcMsgSend);
+			if (isMainThread) return false;
+
+			if ("1".equals(System.getenv("JAVA_STARTED_ON_FIRST_THREAD_" + processID))) return false;
+		}
+
+		// Check whether this JVM process is a child JVM process already.
+		// This state shouldn't usually be reachable, but this stops us from endlessly spawning new child JVM processes.
+		if ("true".equals(System.getProperty(JVM_RESTARTED_ARG))) {
+			System.err.println(CHILD_LOOP_ERR_MSG);
+			return false;
+		}
+
+		// Spawn the child JVM process with updated environment variables or JVM args
+		List<String> jvmArgs = new ArrayList<>();
+		// The following line is used assuming you target Java 8, the minimum for LWJGL3.
+		String javaExecPath = System.getProperty("java.home") + "/bin/java";
+		// If targeting Java 9 or higher, you could use the following instead of the above line:
+		//String javaExecPath = ProcessHandle.current().info().command().orElseThrow()
+		if (!(new File(javaExecPath).exists())) {
+			System.err.println(getJreErrMsg(isMac));
+			return false;
+		}
+
+		jvmArgs.add(javaExecPath);
+		if (isMac) jvmArgs.add("-XstartOnFirstThread");
+		jvmArgs.add("-D" + JVM_RESTARTED_ARG + "=true");
+		jvmArgs.addAll(ManagementFactory.getRuntimeMXBean().getInputArguments());
+		jvmArgs.add("-cp");
+		jvmArgs.add(System.getProperty("java.class.path"));
+		String mainClass = System.getenv("JAVA_MAIN_CLASS_" + processID);
+		if (mainClass == null) {
+			StackTraceElement[] trace = Thread.currentThread().getStackTrace();
+			if (trace.length > 0) mainClass = trace[trace.length - 1].getClassName();
+			else {
+				System.err.println("The main class could not be determined.");
+				return false;
+			}
+		}
+		jvmArgs.add(mainClass);
+
+		try {
+			ProcessBuilder processBuilder = new ProcessBuilder(jvmArgs);
+			if (!isMac) processBuilder.environment().put("__GL_THREADED_OPTIMIZATIONS", "0");
+
+			if (!inheritIO) processBuilder.start();
+			else processBuilder.inheritIO().start().waitFor();
+		} catch (Exception e) {
+			System.err.println("There was a problem restarting the JVM.");
+			// noinspection CallToPrintStackTrace
+			e.printStackTrace();
+		}
+
+		return true;
+	}
+
+	private static String getJreErrMsg(boolean isMac) {
+		if (isMac) return MAC_JRE_ERR_MSG;
+		else return LINUX_JRE_ERR_MSG;
+	}
+
+	private static long getProcessID(boolean isMac) {
+		if (isMac) return LibC.getpid();
+		else return UNISTD.getpid();
+	}
+}=== ./lwjgl3/build/resources/main/ui/uiskin.json ===
+{
+com.badlogic.gdx.graphics.g2d.BitmapFont: {
+  default: {
+    file: font.fnt
+  }
+  font: {
+    file: font.fnt
+  }
+  list: {
+    file: font-list.fnt
+  }
+  subtitle: {
+    file: font-subtitle.fnt
+  }
+  window: {
+    file: font-window.fnt
+  }
+}
+com.badlogic.gdx.graphics.Color: {
+  black: {
+    r: 0
+    g: 0
+    b: 0
+    a: 1
+  }
+  disabled: {
+    r: 0.23137255
+    g: 0.24705882
+    b: 0.25882354
+    a: 1
+  }
+  highlight: {
+    r: 0.19215687
+    g: 0.6627451
+    b: 0.95686275
+    a: 1
+  }
+  message: {
+    r: 0.44313726
+    g: 0.47843137
+    b: 0.5372549
+    a: 1
+  }
+  split: {
+    r: 0.44313726
+    g: 0.47843137
+    b: 0.5372549
+    a: 1
+  }
+  white: {
+    r: 1
+    g: 1
+    b: 1
+    a: 1
+  }
+}
+com.badlogic.gdx.scenes.scene2d.ui.Skin$TintedDrawable: {
+  split: {
+    name: white
+    color: split
+  }
+  black: {
+    name: white
+    color: black
+  }
+  highlight: {
+    name: white
+    color: highlight
+  }
+}
+com.badlogic.gdx.scenes.scene2d.utils.TiledDrawable: {
+  progress-bar-knob-t: {
+    region: progress-bar-knob
+    minWidth: 0
+    minHeight: 5
+  }
+}
+com.badlogic.gdx.scenes.scene2d.ui.Button$ButtonStyle: {
+  default: {
+    up: button-normal
+    down: button-normal-pressed
+    over: button-normal-over
+    focused: button-normal-over
+  }
+  spinner-up: {
+    up: spinner-up
+    down: spinner-up-pressed
+    over: spinner-up-over
+  }
+  spinner-down: {
+    up: spinner-down
+    down: spinner-down-pressed
+    over: spinner-down-over
+  }
+}
+com.badlogic.gdx.scenes.scene2d.ui.CheckBox$CheckBoxStyle: {
+  default: {
+    checkboxOn: checkbox-selected
+    checkboxOff: checkbox
+    checkboxOnOver: checkbox-selected-over
+    checkboxOver: checkbox-over
+    font: font
+  }
+  radio: {
+    checkboxOn: radio-selected
+    checkboxOff: radio
+    checkboxOnOver: radio-selected-over
+    checkboxOver: radio-over
+    font: font
+  }
+}
+com.badlogic.gdx.scenes.scene2d.ui.ImageButton$ImageButtonStyle: {
+  default: {
+    up: button-normal
+    down: button-normal-pressed
+    over: button-normal-over
+    focused: button-normal-over
+  }
+}
+com.badlogic.gdx.scenes.scene2d.ui.ImageTextButton$ImageTextButtonStyle: {
+  default: {
+    font: font
+    up: button-normal
+    down: button-normal-pressed
+    over: button-normal-over
+    focused: button-normal-pressed
+  }
+}
+com.badlogic.gdx.scenes.scene2d.ui.Label$LabelStyle: {
+  default: {
+    font: font
+  }
+  window: {
+    font: window
+  }
+  list: {
+    font: list
+  }
+  subtitle: {
+    font: subtitle
+  }
+}
+com.badlogic.gdx.scenes.scene2d.ui.List$ListStyle: {
+  default: {
+    font: list
+    fontColorSelected: white
+    fontColorUnselected: white
+        selection: selection
+        background: list
+    }
+    list-nobg: {
+        font: list
+        fontColorSelected: white
+        fontColorUnselected: white
+        selection: selection
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.ProgressBar$ProgressBarStyle: {
+    default-horizontal: {
+        background: progress-bar-square
+        knobBefore: progress-bar-square-knob
+    }
+    default-vertical: {
+        background: progress-bar-square
+        knobBefore: progress-bar-square-knob
+    }
+    curved: {
+        background: progress-bar
+        knobBefore: progress-bar-knob-t
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.ScrollPane$ScrollPaneStyle: {
+    default: {
+        hScrollKnob: scrollbar
+        vScrollKnob: scrollbar
+    }
+    list: {
+        background: list
+        hScrollKnob: scrollbar
+        vScrollKnob: scrollbar
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.SelectBox$SelectBoxStyle: {
+    default: {
+        font: font
+        fontColor: white
+        background: select-box
+        scrollStyle: list
+        listStyle: list-nobg
+        backgroundOpen: select-box-open
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.Slider$SliderStyle: {
+    default-horizontal: {
+        knobOver: slider-knob-over
+        knobDown: slider-knob-over
+        background: progress-bar-square
+        knob: slider-knob
+    }
+    default-vertical: {
+        knobOver: slider-knob-over
+        knobDown: slider-knob-over
+        background: progress-bar-square
+        knob: slider-knob
+    }
+    curved: {
+        knobOver: slider-knob-over
+        knobDown: slider-knob-over
+        background: slider
+        knob: slider-knob
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.SplitPane$SplitPaneStyle: {
+    default-horizontal: {
+        handle: split
+    }
+    default-vertical: {
+        handle: split
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.TextButton$TextButtonStyle: {
+    default: {
+        font: font
+        up: button-normal
+        down: button-normal-pressed
+        over: button-normal-over
+        focused: button-normal-over
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.TextField$TextFieldStyle: {
+    default: {
+        font: font
+        fontColor: white
+        disabledFontColor: disabled
+        background: textfield
+        focusedBackground: textfield-selected
+        cursor: white
+        selection: highlight
+        messageFont: font
+        messageFontColor: message
+    }
+    spinner: {
+        font: font
+        fontColor: white
+        disabledFontColor: disabled
+        background: spinner-textfield
+        focusedBackground: spinner-textfield-selected
+        cursor: white
+        selection: highlight
+        messageFont: font
+        messageFontColor: message
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.TextTooltip$TextTooltipStyle: {
+    default: {
+        label: default
+        background: list
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.Touchpad$TouchpadStyle: {
+    default: {
+        background: list
+        knob: slider-knob
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.Window$WindowStyle: {
+    default: {
+        background: window
+        titleFont: window
+    }
+},
+
+    com.badlogic.gdx.graphics.Color: {
+        white: { r: 1, g: 1, b: 1, a: 1 },
+        gray: { r: 0.5, g: 0.5, b: 0.5, a: 1 },
+        black: { r: 0, g: 0, b: 0, a: 1 },
+
+        up: { r: 0.1, g: 0.1, b: 0.1, a: 1 },
+        over: { r: 0.3, g: 0.3, b: 0.3, a: 1 },
+        down: { r: 0.3, g: 0, b: 0, a: 1 },
+        checked: { r: 0.3, g: 0, b: 0, a: 1 },
+        checkedOver: { r: 0.4, g: 0, b: 0, a: 1 },
+        disabled: { r: 0.4, g: 0.4, b: 0.4, a: 1 },
+        background: { r: 0.2, g: 0.2, b: 0.2, a: 1 },
+        selection: { r: 0.3, g: 0, b: 0, a: 1 },
+        semiTransparent: { r: 0, g: 0, b: 0, a: 0.6 },
+
+        font: white
+        fontOver: white
+        fontDown: gray
+        fontChecked: white
+        fontCheckedOver: white
+        fontDisabled: gray
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.Skin$TintedDrawable: {
+        buttonUp: { name: rect, color: up },
+        buttonOver: { name: rect, color: over },
+        buttonDown: { name: rect, color: down },
+        buttonDisabled: { name: rect, color: disabled },
+        buttonChecked: { name: rect, color: checked },
+        buttonCheckedOver: { name: rect, color: checkedOver },
+        checkBoxOn: { name: check-on, color: up },
+        checkBoxOff: { name: check, color: up },
+        checkBoxOver: { name: check, color: over },
+        checkBoxOnDisabled: { name: check-on, color: disabled },
+        checkBoxOffDisabled: { name: check, color: disabled },
+        icon: { name: check-on, color: font },
+        selection: { name: dot, color: selection },
+        list: { name: rect, color: background },
+        progressHorizontal: { name: line-v, color: up },
+        progressHorizontalKnob: { name: line-v, color: down },
+        progressHorizontalDisabled: { name: line-v, color: disabled },
+        progressHorizontalKnobDisabled: { name: line-v, color: disabled },
+        progressVertical: { name: line-h, color: up },
+        progressVerticalKnob: { name: line-h, color: down },
+        progressVerticalDisabled: { name: line-h, color: disabled },
+        progressVerticalKnobDisabled: { name: line-h, color: disabled },
+        scrollHorizontal: { name: line-v, color: up },
+        scrollVertical: { name: line-h, color: up },
+        scrollKnob: { name: knob-v, color: down },
+        scrollKnobVertical: { name: knob-h, color: down },
+        scrollPane: { name: rect, color: background },
+        selectBox: { name: select, color: up },
+        selectOver: { name: select, color: over },
+        selectDown: { name: select, color: over },
+        selectDisabled: { name: select, color: disabled },
+        selectList: { name: rect, color: over },
+        splitPane: { name: square, color: down },
+        sliderHorizontal: { name: square, color: up },
+        sliderKnob: { name: rect, color: up },
+        sliderKnobOver: { name: rect, color: over },
+        sliderKnobDown: { name: rect, color: down },
+        sliderKnobDisabled: { name: rect, color: disabled },
+        sliderVertical: { name: square, color: up },
+        sliderVerticalKnob: { name: rect, color: up },
+        sliderVerticalKnobOver: { name: rect, color: over },
+        sliderVerticalKnobDown: { name: rect, color: down },
+        sliderVerticalKnobDisabled: { name: rect, color: disabled },
+        textField: { name: rect, color: up },
+        textFieldDown: { name: rect, color: over },
+        textFieldDisabled: { name: rect, color: disabled },
+        textFieldCursor: { name: dot, color: font },
+        tooltip: { name: rect, color: up },
+        touchpad: { name: rect, color: over },
+        touchpadKnob: { name: check-on, color: down },
+        tree: { name: rect, color: background },
+        treeOver: { name: dot, color: over },
+        treeMinus: { name: tree-minus, color: up },
+        treePlus: { name: tree-plus, color: up },
+        window: { name: rect, color: background },
+        windowResize: { name: window-resize, color: background },
+        windowBorder: { name: window-border, color: background },
+        alpha: { name: dot, color: semiTransparent }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.Button$ButtonStyle: {
+        default: { up: buttonUp, over: buttonOver, down: buttonDown, disabled: buttonDisabled },
+        toggle: { up: buttonUp, over: buttonOver, down: buttonDown, checked: buttonChecked, checkedOver: buttonCheckedOver, disabled: buttonDisabled }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.CheckBox$CheckBoxStyle: {
+        default: { checkboxOn: checkBoxOn, checkboxOff: checkBoxOff, checkboxOver: checkBoxOver, checkboxOnDisabled: checkBoxOnDisabled,
+            checkboxOffDisabled: checkBoxOffDisabled, font: default, fontColor: font, overFontColor: fontOver, downFontColor: fontDown,
+            checkedFontColor: fontChecked, checkedOverFontColor: fontCheckedOver, disabledFontColor: fontDisabled, pressedOffsetY: -1, pressedOffsetX: 1 }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.ImageButton$ImageButtonStyle: {
+        default: { up: buttonUp, over: buttonOver, down: buttonDown, disabled: buttonDisabled, imageUp: icon }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.ImageTextButton$ImageTextButtonStyle: {
+        default: { up: buttonUp, over: buttonOver, down: buttonDown, disabled: buttonDisabled, font: default, fontColor: font,
+            overFontColor: fontOver, downFontColor: fontDown, disabledFontColor: fontDisabled, pressedOffsetY: -1, pressedOffsetX: 1, imageUp: icon }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.Label$LabelStyle: {
+        default: { font: default, fontColor: font },
+        white: { font: default, fontColor: white }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.List$ListStyle: {
+        default: { fontColorUnselected: font, selection: selection, fontColorSelected: fontDown, font: default },
+        background: { background: list, fontColorUnselected: font, selection: selection, fontColorSelected: fontDown, font: default }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.ProgressBar$ProgressBarStyle: {
+        default-horizontal: { background: progressHorizontal, knobBefore: progressHorizontalKnob,
+            disabledBackground: progressHorizontalDisabled, disabledKnobBefore: progressHorizontalKnobDisabled },
+        default-vertical: { background: progressVertical, knobBefore: progressVerticalKnob,
+            disabledBackground: progressVerticalDisabled, disabledKnobBefore: progressVerticalKnobDisabled }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.ScrollPane$ScrollPaneStyle: {
+        default: { hScrollKnob: scrollKnob, vScrollKnob: scrollKnobVertical, hScroll: scrollHorizontal, vScroll: scrollVertical },
+        clean: { hScrollKnob: scrollKnob, vScrollKnob: scrollKnobVertical },
+        background: { background: scrollPane, hScrollKnob: scrollKnob, vScrollKnob: scrollKnobVertical, hScroll: scrollHorizontal, vScroll: scrollVertical }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.SelectBox$SelectBoxStyle: {
+        default: { font: default, fontColor: font, disabledFontColor: fontDisabled, background: selectBox, backgroundOver: selectOver,
+            backgroundOpen: selectDown, backgroundDisabled: selectDisabled, scrollStyle: default, listStyle:
+            { background: selectList, fontColorUnselected: font, selection: selection, fontColorSelected: fontDown, font: default }
+        }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.Slider$SliderStyle: {
+        default-horizontal: { background: sliderHorizontal, knob: sliderKnob, knobOver: sliderKnobOver, knobDown: sliderKnobDown,
+            disabledKnob: sliderKnobDisabled },
+        default-vertical: { background: sliderVertical, knob: sliderVerticalKnob, knobOver: sliderVerticalKnobOver,
+            knobDown: sliderVerticalKnobDown,    disabledKnob: sliderVerticalKnobDisabled }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.SplitPane$SplitPaneStyle: {
+        default-vertical: { handle: splitPane },
+        default-horizontal: { handle: splitPane }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.TextButton$TextButtonStyle: {
+        default: { up: buttonUp, over: buttonOver, down: buttonDown, disabled: buttonDisabled, font: default, fontColor: font,
+            overFontColor: fontOver, downFontColor: fontDown, disabledFontColor: fontDisabled, pressedOffsetY: -1, pressedOffsetX: 1 },
+        toggle: { up: buttonUp, over: buttonOver, down: buttonDown, checked: buttonChecked, checkedOver: buttonCheckedOver,
+            disabled: buttonDisabled, font: default, fontColor: font, overFontColor: fontOver, downFontColor: fontDown, disabledFontColor:
+            fontDisabled, checkedFontColor: fontChecked, checkedOverFontColor: fontCheckedOver, pressedOffsetY: -1, pressedOffsetX: 1 },
+        text: { font: default, fontColor: up, overFontColor: over, downFontColor: down, disabledFontColor: disabled,
+            pressedOffsetY: -1, pressedOffsetX: 1 },
+        textToggle: { font: default, fontColor: up, overFontColor: over, downFontColor: down, disabledFontColor:
+        disabled, checkedFontColor: font, checkedOverFontColor: fontOver, pressedOffsetY: -1, pressedOffsetX: 1 }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.TextField$TextFieldStyle: {
+        default: { font: default, messageFont: default, fontColor: font, focusedFontColor: fontOver, disabledFontColor: fontDisabled,
+            messageFontColor: fontDown, background: textField, focusedBackground: textFieldDown, disabledBackground: textFieldDisabled,
+            cursor: textFieldCursor, selection: selection }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.TextTooltip$TextTooltipStyle: {
+        default: { label: default, background: tooltip }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.Touchpad$TouchpadStyle: {
+        default: { background: touchpad, knob: touchpadKnob }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.Tree$TreeStyle: {
+        default: { minus: treeMinus, plus: treePlus, selection: selection, over: treeOver },
+        background: { background: tree, minus: treeMinus, plus: treePlus, selection: selection, over: treeOver }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.Window$WindowStyle: {
+        default: { titleFont: default, background: window, titleFontColor: fontDisabled },
+        resize: { titleFont: default, background: windowResize, titleFontColor: fontDisabled },
+        border: { titleFont: default, background: windowBorder, titleFontColor: fontDisabled },
+        dialog: { titleFont: default, background: window, titleFontColor: fontDisabled, stageBackground: alpha }
+    }
+}
+=== ./lwjgl3/nativeimage.gradle ===
+
+project(":lwjgl3") {
+  apply plugin: "org.graalvm.buildtools.native"
+
+  graalvmNative {
+    binaries {
+      main {
+        imageName = appName
+        mainClass = application.mainClass
+        requiredVersion = '23.0'
+        buildArgs.add("-march=compatibility")
+        jvmArgs.addAll("-Dfile.encoding=UTF8")
+        sharedLibrary = false
+        resources.autodetect()
+      }
+    }
+  }
+
+  run {
+    doNotTrackState("Running the app should not be affected by Graal.")
+  }
+
+  // Modified from https://lyze.dev/2021/04/29/libGDX-Internal-Assets-List/ ; thanks again, Lyze!
+  // This creates a resource-config.json file based on the contents of the assets folder (and the libGDX icons).
+  // This file is used by Graal Native to embed those specific files.
+  // This has to run before nativeCompile, so it runs at the start of an unrelated resource-handling command.
+  generateResourcesConfigFile.doFirst {
+    def assetsFolder = new File("${project.rootDir}/assets/")
+    def lwjgl3 = project(':lwjgl3')
+    def resFolder = new File("${lwjgl3.projectDir}/src/main/resources/META-INF/native-image/${lwjgl3.ext.appName}")
+    resFolder.mkdirs()
+    def resFile = new File(resFolder, "resource-config.json")
+    resFile.delete()
+    resFile.append(
+            """{
+  "resources":{
+  "includes":[
+    {
+      "pattern": ".*(""")
+    // This adds every filename in the assets/ folder to a pattern that adds those files as resources.
+    fileTree(assetsFolder).each {
+      // The backslash-Q and backslash-E escape the start and end of a literal string, respectively.
+      resFile.append("\\\\Q${it.name}\\\\E|")
+    }
+    // We also match all of the window icon images this way and the font files that are part of libGDX.
+    resFile.append(
+            """libgdx.+\\\\.png|lsans.+)"
+    }
+  ]},
+  "bundles":[]
+}"""
+    )
+  }
+}
+=== ./lwjgl3/build.gradle ===
+
+buildscript {
+  repositories {
+    gradlePluginPortal()
+  }
+  dependencies {
+    classpath "io.github.fourlastor:construo:2.1.0"
+    if(enableGraalNative == 'true') {
+      classpath "org.graalvm.buildtools.native:org.graalvm.buildtools.native.gradle.plugin:0.9.28"
+    }
+  }
+}
+plugins {
+  id "application"
+}
+apply plugin: 'io.github.fourlastor.construo'
+
+
+import io.github.fourlastor.construo.Target
+
+sourceSets.main.resources.srcDirs += [ rootProject.file('assets').path ]
+application.mainClass = 'fr.github.tcgame.lwjgl3.Lwjgl3Launcher'
+application.applicationName = appName
+eclipse.project.name = appName + '-lwjgl3'
+java.sourceCompatibility = 17
+java.targetCompatibility = 17
+if (JavaVersion.current().isJava9Compatible()) {
+        compileJava.options.release.set(17)
+}
+
+dependencies {
+  implementation "com.badlogicgames.gdx:gdx-backend-lwjgl3:$gdxVersion"
+  implementation "com.badlogicgames.gdx:gdx-box2d-platform:$gdxVersion:natives-desktop"
+  implementation "com.badlogicgames.gdx:gdx-freetype-platform:$gdxVersion:natives-desktop"
+  implementation "com.badlogicgames.gdx:gdx-platform:$gdxVersion:natives-desktop"
+  implementation project(':core')
+
+  if(enableGraalNative == 'true') {
+    implementation "io.github.berstanio:gdx-svmhelper-backend-lwjgl3:$graalHelperVersion"
+      implementation "io.github.berstanio:gdx-svmhelper-extension-box2d:$graalHelperVersion"
+      implementation "io.github.berstanio:gdx-svmhelper-extension-freetype:$graalHelperVersion"
+
+  }
+  // Forces LWJGL3 to use at least $lwjgl3Version, currently 3.4.1, to avoid problems on Java 25 and up.
+  constraints{
+    implementation("org.lwjgl:lwjgl:$lwjgl3Version")
+    implementation("org.lwjgl:lwjgl-glfw:$lwjgl3Version")
+    implementation("org.lwjgl:lwjgl-jemalloc:$lwjgl3Version")
+    implementation("org.lwjgl:lwjgl-openal:$lwjgl3Version")
+    implementation("org.lwjgl:lwjgl-opengl:$lwjgl3Version")
+    implementation("org.lwjgl:lwjgl-stb:$lwjgl3Version")
+  }
+}
+
+def os = System.properties['os.name'].toLowerCase(Locale.ROOT)
+
+run {
+  workingDir = rootProject.file('assets').path
+// You can uncomment the next line if your IDE claims a build failure even when the app closed properly.
+  //setIgnoreExitValue(true)
+  jvmArgs += "--enable-native-access=ALL-UNNAMED"
+  if (os.contains('mac')) jvmArgs += "-XstartOnFirstThread"
+}
+
+jar {
+// sets the name of the .jar file this produces to the name of the game or app, with the version after.
+  archiveFileName.set("${appName}-${projectVersion}.jar")
+// the duplicatesStrategy matters starting in Gradle 7.0; this setting works.
+  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+  dependsOn configurations.runtimeClasspath
+  from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+// these "exclude" lines remove some unnecessary duplicate files in the output JAR.
+  exclude('META-INF/INDEX.LIST', 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA')
+  dependencies {
+    exclude('META-INF/INDEX.LIST', 'META-INF/maven/**')
+  }
+// setting the manifest makes the JAR runnable.
+// enabling native access helps avoid a warning when Java 24 or later runs the JAR.
+// setting Multi-Release to true allows LWJGL3 to use different classes on recent Java versions.
+  manifest {
+    attributes 'Main-Class': application.mainClass, 'Enable-Native-Access': 'ALL-UNNAMED', 'Multi-Release': 'true'
+  }
+// this last step may help on some OSes that need extra instruction to make runnable JARs.
+  doLast {
+    file(archiveFile).setExecutable(true, false)
+  }
+}
+
+// Builds a JAR that only includes the files needed to run on macOS, not Windows or Linux.
+// The file size for a Mac-only JAR is about 7MB smaller than a cross-platform JAR.
+tasks.register("jarMac") {
+  dependsOn("jar")
+  group("build")
+  jar.archiveFileName.set("${appName}-${projectVersion}-mac.jar")
+  jar.exclude("windows/x86/**", "windows/x64/**", "linux/arm32/**", "linux/arm64/**", "linux/x64/**", "**/*.dll", "**/*.so",
+    'META-INF/INDEX.LIST', 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA')
+  dependencies {
+    jar.exclude("windows/x86/**", "windows/x64/**", "linux/arm32/**", "linux/arm64/**", "linux/x64/**",
+      'META-INF/INDEX.LIST', 'META-INF/maven/**')
+  }
+}
+
+// Builds a JAR that only includes the files needed to run on Linux, not Windows or macOS.
+// The file size for a Linux-only JAR is about 5MB smaller than a cross-platform JAR.
+tasks.register("jarLinux") {
+  dependsOn("jar")
+  group("build")
+  jar.archiveFileName.set("${appName}-${projectVersion}-linux.jar")
+  jar.exclude("windows/x86/**", "windows/x64/**", "macos/arm64/**", "macos/x64/**", "**/*.dll", "**/*.dylib",
+    'META-INF/INDEX.LIST', 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA')
+  dependencies {
+    jar.exclude("windows/x86/**", "windows/x64/**", "macos/arm64/**", "macos/x64/**",
+      'META-INF/INDEX.LIST', 'META-INF/maven/**')
+  }
+}
+
+// Builds a JAR that only includes the files needed to run on Windows, not Linux or macOS.
+// The file size for a Windows-only JAR is about 6MB smaller than a cross-platform JAR.
+tasks.register("jarWin") {
+  dependsOn("jar")
+  group("build")
+  jar.archiveFileName.set("${appName}-${projectVersion}-win.jar")
+  jar.exclude("macos/arm64/**", "macos/x64/**", "linux/arm32/**", "linux/arm64/**", "linux/x64/**", "**/*.dylib", "**/*.so",
+    'META-INF/INDEX.LIST', 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA')
+  dependencies {
+    jar.exclude("macos/arm64/**", "macos/x64/**", "linux/arm32/**", "linux/arm64/**", "linux/x64/**",
+      'META-INF/INDEX.LIST', 'META-INF/maven/**')
+  }
+}
+
+construo {
+  // name of the executable
+  name.set(appName)
+  // human-readable name, used for example in the `.app` name for macOS
+  humanName.set(appName)
+  jlink {
+    guessModulesFromJar.set(false)
+    // You may need to add more modules, as needed.
+    modules.addAll("java.base", "java.management", "java.desktop", "jdk.unsupported")
+  }
+
+  targets.configure {
+    register("linuxX64", Target.Linux) {
+      architecture.set(Target.Architecture.X86_64)
+      jdkUrl.set("https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.10%2B7/OpenJDK21U-jdk_x64_linux_hotspot_21.0.10_7.tar.gz")
+      // Linux does not currently have a way to set the icon on the executable
+    }
+    register("macM1", Target.MacOs) {
+      architecture.set(Target.Architecture.AARCH64)
+      jdkUrl.set("https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.10%2B7/OpenJDK21U-jdk_aarch64_mac_hotspot_21.0.10_7.tar.gz")
+      // macOS needs an identifier
+      identifier.set("fr.github.tcgame." + appName)
+      // Optional: icon for macOS, as an ICNS file
+      macIcon.set(project.file("icons/logo.icns"))
+    }
+    register("macX64", Target.MacOs) {
+      architecture.set(Target.Architecture.X86_64)
+      jdkUrl.set("https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.10%2B7/OpenJDK21U-jdk_x64_mac_hotspot_21.0.10_7.tar.gz")
+      // macOS needs an identifier
+      identifier.set("fr.github.tcgame." + appName)
+      // Optional: icon for macOS, as an ICNS file
+      macIcon.set(project.file("icons/logo.icns"))
+    }
+    register("winX64", Target.Windows) {
+      architecture.set(Target.Architecture.X86_64)
+      // Optional: icon for Windows, as a PNG
+      icon.set(project.file("icons/logo.png"))
+      jdkUrl.set("https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.10%2B7/OpenJDK21U-jdk_x64_windows_hotspot_21.0.10_7.zip")
+      // Uncomment the next line to show a console when the game runs, to print messages.
+      //useConsole.set(true)
+    }
+  }
+}
+
+// Equivalent to the jar task; here for compatibility with gdx-setup.
+tasks.register('dist') {
+  dependsOn 'jar'
+}
+
+distributions {
+  main {
+    contents {
+      into('libs') {
+        project.configurations.runtimeClasspath.files.findAll { file ->
+          file.getName() != project.tasks.jar.outputs.files.singleFile.name
+        }.each { file ->
+          exclude file.name
+        }
+      }
+    }
+  }
+}
+
+startScripts.dependsOn(':lwjgl3:jar')
+startScripts.classpath = project.tasks.jar.outputs.files
+
+if(enableGraalNative == 'true') {
+  apply from: file("nativeimage.gradle")
+}
+=== ./gradle/wrapper/gradle-wrapper.properties ===
+distributionBase=GRADLE_USER_HOME
+distributionPath=wrapper/dists
+distributionUrl=https\://services.gradle.org/distributions/gradle-9.4.0-bin.zip
+networkTimeout=10000
+validateDistributionUrl=true
+zipStoreBase=GRADLE_USER_HOME
+zipStorePath=wrapper/dists
+=== ./gradle/gradle-daemon-jvm.properties ===
+#This file is generated by updateDaemonJvm
+toolchainUrl.FREE_BSD.AARCH64=https\://api.foojay.io/disco/v3.0/ids/df211d3c3eefdc408b462041881bc575/redirect
+toolchainUrl.FREE_BSD.X86_64=https\://api.foojay.io/disco/v3.0/ids/93aeea858331bd6bb00ba94759830234/redirect
+toolchainUrl.LINUX.AARCH64=https\://api.foojay.io/disco/v3.0/ids/df211d3c3eefdc408b462041881bc575/redirect
+toolchainUrl.LINUX.X86_64=https\://api.foojay.io/disco/v3.0/ids/b41931cf1e70bc8e08d7dd19c343ef00/redirect
+toolchainUrl.MAC_OS.AARCH64=https\://api.foojay.io/disco/v3.0/ids/3426ffcaa54c3f62406beb1f1ab8b179/redirect
+toolchainUrl.MAC_OS.X86_64=https\://api.foojay.io/disco/v3.0/ids/d6690dfd71c4c91e08577437b5b2beb0/redirect
+toolchainUrl.UNIX.AARCH64=https\://api.foojay.io/disco/v3.0/ids/df211d3c3eefdc408b462041881bc575/redirect
+toolchainUrl.UNIX.X86_64=https\://api.foojay.io/disco/v3.0/ids/b41931cf1e70bc8e08d7dd19c343ef00/redirect
+toolchainUrl.WINDOWS.AARCH64=https\://api.foojay.io/disco/v3.0/ids/1e91f45234d88a64dafb961c93ddc75a/redirect
+toolchainUrl.WINDOWS.X86_64=https\://api.foojay.io/disco/v3.0/ids/552c7bffe0370c66410a51c55985b511/redirect
+toolchainVersion=21
+=== ./settings.gradle ===
+plugins {
+  // Applies the foojay-resolver plugin to allow automatic download of JDKs.
+  id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+// A list of which subprojects to load as part of the same larger project.
+// You can remove Strings from the list and reload the Gradle project
+// if you want to temporarily disable a subproject.
+include 'lwjgl3', 'core'
+=== ./.idea/misc.xml ===
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ExternalStorageConfigurationManager" enabled="true" />
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_17" project-jdk-name="21" project-jdk-type="JavaSDK" />
+</project>=== ./.idea/workspace.xml ===
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="SELECTIVE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="ba8d128a-51b2-4431-8dcb-73175e67d418" name="Changes" comment="" />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ExternalProjectsData">
+    <projectState path="$PROJECT_DIR$">
+      <ProjectState />
+    </projectState>
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Class" />
+      </list>
+    </option>
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 2,
+  &quot;fromUser&quot;: false
+}</component>
+  <component name="ProjectId" id="3D4gELSzZKFeSlWANwObG9iEChX" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.typescript.service.memoryLimit.init&quot;: &quot;true&quot;,
+    &quot;codeWithMe.voiceChat.enabledByDefault&quot;: &quot;false&quot;,
+    &quot;kotlin-language-version-configured&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/antoinec/Bureau/ProjetJava-menu-antoine&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;
+  }
+}</component>
+  <component name="RunManager">
+    <configuration default="true" type="JetRunConfigurationType">
+      <method v="2">
+        <option name="Make" enabled="true" />
+      </method>
+    </configuration>
+    <configuration default="true" type="KotlinStandaloneScriptRunConfigurationType">
+      <option name="filePath" />
+      <method v="2" />
+    </configuration>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="ba8d128a-51b2-4431-8dcb-73175e67d418" name="Changes" comment="" />
+      <created>1777546643105</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1777546643105</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+</project>=== ./.idea/gradle.xml ===
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="GradleMigrationSettings" migrationVersion="1" />
+  <component name="GradleSettings">
+    <option name="linkedExternalProjectsSettings">
+      <GradleProjectSettings>
+        <option name="externalProjectPath" value="$PROJECT_DIR$" />
+        <option name="modules">
+          <set>
+            <option value="$PROJECT_DIR$" />
+            <option value="$PROJECT_DIR$/core" />
+            <option value="$PROJECT_DIR$/lwjgl3" />
+          </set>
+        </option>
+      </GradleProjectSettings>
+    </option>
+  </component>
+</project>=== ./.idea/compiler.xml ===
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <bytecodeTargetLevel target="17" />
+  </component>
+</project>=== ./core/src/main/java/fr/github/tcgame/view/menu/MainMenu.java ===
+package fr.github.tcgame.view.menu;
+
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
+import fr.github.tcgame.control.MenuController;
+
+public class MainMenu extends Menu {
+
+    public MainMenu(MenuController controller) {
+        super(TypeMenu.MAIN, controller);
+    }
+
+    @Override
+    protected void build() {
+        Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        pixmap.setColor(Color.BLACK);
+        pixmap.fill();
+        Texture blackTex = new Texture(pixmap);
+        pixmap.dispose();
+        Image blackBg = new Image(blackTex);
+        blackBg.setFillParent(true);
+        stage.addActor(blackBg);
+
+        setBackground("placeholder/BG_MainMenu.jpg");
+
+        addLabel("TASTY CROUSTY", WIDTH / 2f, HEIGHT * 0.65f, 72, OR_PALE);
+
+        float centreX = WIDTH / 2f;
+        float optY    = HEIGHT * 0.45f;
+        float gap     = HEIGHT * 0.04f;
+
+        addMenuOption("JOUER",      centreX, optY,           controller::goJouer);
+        addMenuOption("COLLECTION", centreX, optY - gap,     controller::goCollection);
+        addMenuOption("PARAMETRES", centreX, optY - gap * 2, controller::goParametres);
+        addMenuOption("QUITTER",    centreX, optY - gap * 3, controller::quit);
+
+        addLabel("ONLINE",   WIDTH - 80f, 35f, 14, GRIS_MENU);
+        addLabel("Ver. 1.0", WIDTH - 80f, 18f, 12, GRIS_MENU);
+
+        keyIsPressed(Input.Keys.ESCAPE, controller::quit);
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/menu/PauseMenu.java ===
+package fr.github.tcgame.view.menu;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
+import fr.github.tcgame.control.MenuController;
+
+public class PauseMenu extends Menu {
+
+    public PauseMenu(MenuController controller) {
+        super(TypeMenu.PAUSE, controller);
+    }
+
+    @Override
+    protected void build() {
+        Pixmap px = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        px.setColor(0f, 0f, 0f, 0.75f);
+        px.fill();
+        Image fond = new Image(new Texture(px));
+        px.dispose();
+        fond.setFillParent(true);
+        stage.addActor(fond);
+
+        addLabel("PAUSE", WIDTH / 2f, HEIGHT * 0.72f, 56, OR_PALE);
+
+        float centreX = WIDTH / 2f;
+        float optY    = HEIGHT * 0.55f;
+        float gap     = HEIGHT * 0.07f;
+
+        addMenuOption("REPRENDRE",  centreX, optY,           controller::goGame);
+        addMenuOption("PARAMETRES", centreX, optY - gap,     controller::goParametresPause);
+        addMenuOption("QUITTER",    centreX, optY - gap * 2, controller::goQuitGame);
+
+        keyIsPressed(Input.Keys.ESCAPE, controller::goGame);
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/menu/SelectionMenu.java ===
+package fr.github.tcgame.view.menu;
+
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
+import fr.github.tcgame.control.MenuController;
+
+public class SelectionMenu extends Menu {
+    public SelectionMenu(MenuController controller) {
+        super(TypeMenu.SELECTION, controller);
+    }
+
+    @Override
+    protected void build() {
+        setBackground("test/test.jpg");
+
+        addButton("placeholder/bouton.png", 450, 320, 0.35f, controller::playMusic);
+        addLabel("Musique", 530f, 350f, 20, Color.WHITE);
+
+        addButton("placeholder/bouton.png", 450, 185, 0.35f, controller::goMain);
+        addLabel("Retour", 530f, 215f, 20, Color.WHITE);
+
+        keyIsPressed(Input.Keys.ESCAPE, controller::goMain);
+        keyIsPressed(Input.Keys.UP, controller::playMusic);
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/menu/Menu.java ===
+package fr.github.tcgame.view.menu;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.audio.Music;
+import com.badlogic.gdx.audio.Sound;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
+import com.badlogic.gdx.scenes.scene2d.*;
+import com.badlogic.gdx.scenes.scene2d.ui.*;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
+import com.badlogic.gdx.utils.viewport.FitViewport;
+import com.badlogic.gdx.utils.viewport.Viewport;
+import fr.github.tcgame.control.MenuController;
+import java.util.function.Consumer;
+
+public abstract class Menu {
+    public static final float WIDTH  = 1280;
+    public static final float HEIGHT = 720;
+
+    protected Group overlay;
+    protected Stage stage;
+    protected Viewport viewport;
+    protected OrthographicCamera camera;
+    protected Table root;
+    protected MenuController controller;
+
+    public enum TypeMenu {
+        SPLASH, MAIN, SELECTION, QUIT, JOUER,
+        PARAMETRES, AUDIO, CONTROLES,
+        COLLECTION, GAME, PAUSE, QUIT_GAME,
+        PARAMETRES_PAUSE, AUDIO_PAUSE, CONTROLES_PAUSE
+    }
+    public TypeMenu typeMenu;
+
+    protected static final Color OR_PALE   = new Color(0.76f, 0.67f, 0.49f, 1f);
+    protected static final Color GRIS_MENU = new Color(0.63f, 0.63f, 0.63f, 1f);
+    protected static final Color OR_HOVER  = new Color(0.95f, 0.82f, 0.40f, 1f);
+
+    // Sons et musiques
+    protected static Sound clickSound;
+    protected static Music ostMain;
+    protected static Music ostGame;
+    protected static Sound victorySound;
+    protected static Sound defeatSound;
+
+    protected static float volumeMaster  = 1f;
+    protected static float volumeMusique = 1f;
+    protected static float volumeEffets  = 1f;
+
+    public Menu(TypeMenu typeMenu, MenuController controller) {
+        this.typeMenu   = typeMenu;
+        this.controller = controller;
+        camera   = new OrthographicCamera();
+        viewport = new FitViewport(WIDTH, HEIGHT, camera);
+        stage    = new Stage(viewport);
+        root     = new Table();
+        root.setFillParent(true);
+        stage.addActor(root);
+        overlay = new Group();
+        overlay.setVisible(false);
+        stage.addActor(overlay);
+
+        if (clickSound == null)
+            clickSound = Gdx.audio.newSound(Gdx.files.internal("audio/click.mp3"));
+        if (victorySound == null)
+            victorySound = Gdx.audio.newSound(Gdx.files.internal("audio/victory.mp3"));
+        if (defeatSound == null)
+            defeatSound = Gdx.audio.newSound(Gdx.files.internal("audio/defeat.mp3"));
+        if (ostGame == null) {
+            ostGame = Gdx.audio.newMusic(Gdx.files.internal("audio/ost_game.mp3"));
+            ostGame.setLooping(true);
+            ostGame.setVolume(volumeMaster * volumeMusique);
+        }
+        if (ostMain == null) {
+            ostMain = Gdx.audio.newMusic(Gdx.files.internal("audio/ost_main.mp3"));
+            ostMain.setLooping(true);
+            ostMain.setVolume(volumeMaster * volumeMusique);
+            ostMain.play();
+        }
+
+        build();
+    }
+
+    // Joue l'OST du jeu et arrête celle du menu
+    public static void playGameOst() {
+        if (ostMain != null && ostMain.isPlaying()) ostMain.stop();
+        if (ostGame != null && !ostGame.isPlaying()) {
+            ostGame.setVolume(volumeMaster * volumeMusique);
+            ostGame.play();
+        }
+    }
+
+    // Joue l'OST du menu et arrête celle du jeu
+    public static void playMenuOst() {
+        if (ostGame != null && ostGame.isPlaying()) ostGame.stop();
+        if (ostMain != null && !ostMain.isPlaying()) {
+            ostMain.setVolume(volumeMaster * volumeMusique);
+            ostMain.play();
+        }
+    }
+
+    protected static void updateVolumes() {
+        if (ostMain != null) ostMain.setVolume(volumeMaster * volumeMusique);
+        if (ostGame != null) ostGame.setVolume(volumeMaster * volumeMusique);
+    }
+
+    protected BitmapFont cinzel(int size, Color color) {
+        FreeTypeFontGenerator gen = new FreeTypeFontGenerator(
+            Gdx.files.internal("fonts/Cinzel-Regular.ttf")
+        );
+        FreeTypeFontGenerator.FreeTypeFontParameter param = new FreeTypeFontGenerator.FreeTypeFontParameter();
+        param.size      = size;
+        param.color     = color;
+        param.minFilter = Texture.TextureFilter.Linear;
+        param.magFilter = Texture.TextureFilter.Linear;
+        BitmapFont font = gen.generateFont(param);
+        gen.dispose();
+        return font;
+    }
+
+    public void draw() {
+        stage.act(Gdx.graphics.getDeltaTime());
+        stage.draw();
+    }
+
+    public Stage getStage() { return stage; }
+
+    public void resize(int width, int height) {
+        viewport.update(width, height, true);
+        camera.update();
+    }
+
+    public void dispose() { stage.dispose(); }
+
+    protected abstract void build();
+
+    public void setBackground(String texturePath) {
+        Texture texture = new Texture(Gdx.files.internal(texturePath));
+        Image bg = new Image(texture);
+        bg.setFillParent(true);
+        stage.addActor(bg);
+    }
+
+    public void addButton(String texturePath, float x, float y, float size, Runnable action) {
+        Texture texture = new Texture(Gdx.files.internal(texturePath));
+        ImageButton button = new ImageButton(new TextureRegionDrawable(texture));
+        button.setPosition(x, y);
+        button.setSize(texture.getWidth() * size, texture.getHeight() * size);
+        button.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                if (action != null) action.run();
+            }
+        });
+        stage.addActor(button);
+    }
+
+    public void addLabel(String text, float x, float y, int size, Color color) {
+        BitmapFont font = cinzel(size, color);
+        Label.LabelStyle style = new Label.LabelStyle(font, color);
+        Label label = new Label(text, style);
+        label.setPosition(x - label.getPrefWidth() / 2f, y);
+        stage.addActor(label);
+    }
+
+    private Texture makeGlowBar() {
+        int w = 4, h = 40;
+        Pixmap px = new Pixmap(w, h, Pixmap.Format.RGBA8888);
+        for (int y = 0; y < h; y++) {
+            float alpha = 1f - Math.abs((y - h / 2f) / (h / 2f));
+            px.setColor(1f, 0.82f, 0.3f, alpha * 0.9f);
+            px.drawLine(0, y, w - 1, y);
+        }
+        Texture t = new Texture(px);
+        px.dispose();
+        return t;
+    }
+
+    public void addMenuOption(String text, float x, float y, Runnable action) {
+        FreeTypeFontGenerator gen = new FreeTypeFontGenerator(
+            Gdx.files.internal("fonts/Cinzel-Regular.ttf")
+        );
+
+        FreeTypeFontGenerator.FreeTypeFontParameter paramNormal = new FreeTypeFontGenerator.FreeTypeFontParameter();
+        paramNormal.size      = 22;
+        paramNormal.color     = GRIS_MENU;
+        paramNormal.minFilter = Texture.TextureFilter.Linear;
+        paramNormal.magFilter = Texture.TextureFilter.Linear;
+        BitmapFont fontNormal = gen.generateFont(paramNormal);
+
+        FreeTypeFontGenerator.FreeTypeFontParameter paramHover = new FreeTypeFontGenerator.FreeTypeFontParameter();
+        paramHover.size      = 22;
+        paramHover.color     = OR_HOVER;
+        paramHover.minFilter = Texture.TextureFilter.Linear;
+        paramHover.magFilter = Texture.TextureFilter.Linear;
+        BitmapFont fontHover = gen.generateFont(paramHover);
+
+        gen.dispose();
+
+        Label.LabelStyle normalStyle = new Label.LabelStyle(fontNormal, GRIS_MENU);
+        Label.LabelStyle hoverStyle  = new Label.LabelStyle(fontHover, OR_HOVER);
+
+        Label label = new Label(text, normalStyle);
+        float labelW = label.getPrefWidth();
+        float labelX = x - labelW / 2f;
+        label.setPosition(labelX, y);
+        label.setSize(labelW, label.getPrefHeight());
+
+        Texture barTex = makeGlowBar();
+        Image bar = new Image(barTex);
+        float barH = 36f, barW = 4f;
+        bar.setSize(barW, barH);
+        bar.setPosition(labelX - 18f, y + label.getPrefHeight() / 2f - barH / 2f);
+        bar.setVisible(false);
+        stage.addActor(bar);
+
+        label.addListener(new ClickListener() {
+            @Override
+            public void enter(InputEvent event, float mx, float my, int pointer, Actor fromActor) {
+                label.setStyle(hoverStyle);
+                bar.setVisible(true);
+            }
+            @Override
+            public void exit(InputEvent event, float mx, float my, int pointer, Actor toActor) {
+                label.setStyle(normalStyle);
+                bar.setVisible(false);
+            }
+            @Override
+            public void clicked(InputEvent event, float mx, float my) {
+                if (action != null) action.run();
+            }
+        });
+
+        stage.addActor(label);
+    }
+
+    public void keyIsPressed(int key, Runnable action) {
+        stage.addListener(new InputListener() {
+            @Override
+            public boolean keyDown(InputEvent event, int keycode) {
+                if (keycode == key) { action.run(); return true; }
+                return false;
+            }
+        });
+    }
+
+    public void addSearchBar(int maxChar, float x, float y, float width, float height, Consumer<String> onChange) {
+        TextField field = new TextField("",
+            new com.badlogic.gdx.scenes.scene2d.ui.Skin(Gdx.files.internal("ui/uiskin.json")));
+        field.setSize(width, height);
+        field.setPosition(x, y);
+        field.setMaxLength(maxChar);
+        field.setTextFieldListener((textField, c) -> {
+            if (onChange != null) onChange.accept(textField.getText());
+        });
+        stage.addActor(field);
+    }
+
+    public void buildBoardZones() {
+        float margeGauche  = 54f;
+        float margeDroite  = 43f;
+        float largeurLigne = WIDTH - (margeGauche + margeDroite);
+        Pixmap line = new Pixmap((int) largeurLigne, 2, Pixmap.Format.RGBA8888);
+        line.setColor(0, 0, 0, 0.8f);
+        line.fill();
+        Texture tex = new Texture(line);
+        Image lineImg = new Image(tex);
+        line.dispose();
+        lineImg.setPosition(margeGauche, HEIGHT / 2f - 1);
+        lineImg.setSize(largeurLigne, 2);
+        stage.addActor(lineImg);
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/menu/MenuManager.java ===
+package fr.github.tcgame.view.menu;
+
+import com.badlogic.gdx.Gdx;
+import fr.github.tcgame.control.MenuController;
+import fr.github.tcgame.view.game.GameView;
+
+public class MenuManager {
+    private Menu actualMenu;
+    private SplashMenu splashMenu;
+    private MainMenu mainMenu;
+    private SelectionMenu selectionMenu;
+    private JouerMenu jouerMenu;
+    private ParametresMenu parametresMenu;
+    private AudioMenu audioMenu;
+    private ControlesMenu controlesMenu;
+    private QuitMenu quitMenu;
+    private CollectionMenu collectionMenu;
+    private GameView gameView;
+    private PauseMenu pauseMenu;
+    private QuitGameMenu quitGameMenu;
+    private ParametresPauseMenu parametresPauseMenu;
+    private AudioPauseMenu audioPauseMenu;
+    private ControlesPauseMenu controlesPauseMenu;
+    private MenuController controller;
+
+    public MenuManager() {
+        controller = new MenuController(this);
+        changeMenu(Menu.TypeMenu.SPLASH);
+    }
+
+    public void changeMenu(Menu.TypeMenu typeMenu) {
+        if (actualMenu != null && actualMenu.typeMenu == typeMenu) return;
+        switch (typeMenu) {
+            case SPLASH -> {
+                if (splashMenu == null) { splashMenu = new SplashMenu(controller); }
+                actualMenu = splashMenu;
+            }
+            case MAIN -> {
+                if (mainMenu == null) { mainMenu = new MainMenu(controller); }
+                actualMenu = mainMenu;
+            }
+            case SELECTION -> {
+                if (selectionMenu == null) { selectionMenu = new SelectionMenu(controller); }
+                actualMenu = selectionMenu;
+            }
+            case JOUER -> {
+                if (jouerMenu == null) { jouerMenu = new JouerMenu(controller); }
+                actualMenu = jouerMenu;
+            }
+            case PARAMETRES -> {
+                if (parametresMenu == null) { parametresMenu = new ParametresMenu(controller); }
+                actualMenu = parametresMenu;
+            }
+            case AUDIO -> {
+                if (audioMenu == null) { audioMenu = new AudioMenu(controller); }
+                actualMenu = audioMenu;
+            }
+            case CONTROLES -> {
+                if (controlesMenu == null) { controlesMenu = new ControlesMenu(controller); }
+                actualMenu = controlesMenu;
+            }
+            case QUIT -> {
+                if (quitMenu == null) { quitMenu = new QuitMenu(controller); }
+                actualMenu = quitMenu;
+            }
+            case COLLECTION -> {
+                if (collectionMenu == null) { collectionMenu = new CollectionMenu(controller); }
+                actualMenu = collectionMenu;
+            }
+            case GAME -> {
+                gameView = new GameView(controller); // recrée à chaque fois
+                actualMenu = gameView;
+            }
+            case PAUSE -> {
+                if (pauseMenu == null) { pauseMenu = new PauseMenu(controller); }
+                actualMenu = pauseMenu;
+            }
+            case QUIT_GAME -> {
+                if (quitGameMenu == null) { quitGameMenu = new QuitGameMenu(controller); }
+                actualMenu = quitGameMenu;
+            }
+            case PARAMETRES_PAUSE -> {
+                if (parametresPauseMenu == null) { parametresPauseMenu = new ParametresPauseMenu(controller); }
+                actualMenu = parametresPauseMenu;
+            }
+            case AUDIO_PAUSE -> {
+                if (audioPauseMenu == null) { audioPauseMenu = new AudioPauseMenu(controller); }
+                actualMenu = audioPauseMenu;
+            }
+            case CONTROLES_PAUSE -> {
+                if (controlesPauseMenu == null) { controlesPauseMenu = new ControlesPauseMenu(controller); }
+                actualMenu = controlesPauseMenu;
+            }
+        }
+        if (actualMenu != null) {
+            Gdx.input.setInputProcessor(actualMenu.getStage());
+        }
+    }
+
+    public void render() {
+        if (actualMenu != null) { actualMenu.draw(); }
+    }
+
+    public void resize(int width, int height) {
+        if (actualMenu != null) {
+            actualMenu.resize(width, height);
+        }
+    }
+
+    public void dispose() {
+        if (splashMenu != null) splashMenu.dispose();
+        if (mainMenu != null) mainMenu.dispose();
+        if (selectionMenu != null) selectionMenu.dispose();
+        if (jouerMenu != null) jouerMenu.dispose();
+        if (parametresMenu != null) parametresMenu.dispose();
+        if (audioMenu != null) audioMenu.dispose();
+        if (controlesMenu != null) controlesMenu.dispose();
+        if (quitMenu != null) quitMenu.dispose();
+        if (collectionMenu != null) collectionMenu.dispose();
+        if (gameView != null) gameView.dispose();
+        if (pauseMenu != null) pauseMenu.dispose();
+        if (quitGameMenu != null) quitGameMenu.dispose();
+        if (parametresPauseMenu != null) parametresPauseMenu.dispose();
+        if (audioPauseMenu != null) audioPauseMenu.dispose();
+        if (controlesPauseMenu != null) controlesPauseMenu.dispose();
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/menu/ControlesPauseMenu.java ===
+package fr.github.tcgame.view.menu;
+
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
+import fr.github.tcgame.control.MenuController;
+
+public class ControlesPauseMenu extends Menu {
+
+    public ControlesPauseMenu(MenuController controller) {
+        super(TypeMenu.CONTROLES_PAUSE, controller);
+    }
+
+    @Override
+    protected void build() {
+        Pixmap px = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        px.setColor(0f, 0f, 0f, 0.85f);
+        px.fill();
+        Image fond = new Image(new Texture(px));
+        px.dispose();
+        fond.setFillParent(true);
+        stage.addActor(fond);
+
+        addLabel("CONTROLES", WIDTH / 2f, HEIGHT * 0.72f, 56, OR_PALE);
+
+        float centreX = WIDTH / 2f;
+        float optY    = HEIGHT * 0.55f;
+        float gap     = HEIGHT * 0.07f;
+
+        addMenuOption("SAUVEGARDER", centreX, optY,         controller::playMusic);
+        addMenuOption("DEFAULT",     centreX, optY - gap,   controller::playMusic);
+        addMenuOption("RETOUR",      centreX, optY - gap*2, controller::goParametresPause);
+
+        keyIsPressed(Input.Keys.ESCAPE, controller::goParametresPause);
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/menu/ControlesMenu.java ===
+package fr.github.tcgame.view.menu;
+
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
+import fr.github.tcgame.control.MenuController;
+
+public class ControlesMenu extends Menu {
+
+    public ControlesMenu(MenuController controller) {
+        super(TypeMenu.CONTROLES, controller);
+    }
+
+    @Override
+    protected void build() {
+        Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        pixmap.setColor(Color.BLACK);
+        pixmap.fill();
+        Texture blackTex = new Texture(pixmap);
+        pixmap.dispose();
+        Image blackBg = new Image(blackTex);
+        blackBg.setFillParent(true);
+        stage.addActor(blackBg);
+
+        setBackground("placeholder/BG_MainMenu.jpg");
+
+        addLabel("CONTROLES", WIDTH / 2f, HEIGHT * 0.65f, 72, OR_PALE);
+
+        float centreX = WIDTH / 2f;
+        float optY    = HEIGHT * 0.45f;
+        float gap     = HEIGHT * 0.04f;
+
+        addMenuOption("SAUVEGARDER", centreX, optY,         controller::playMusic);
+        addMenuOption("DEFAULT",     centreX, optY - gap,   controller::playMusic);
+        addMenuOption("RETOUR",      centreX, optY - gap*2, controller::goParametres);
+
+        keyIsPressed(Input.Keys.ESCAPE, controller::goParametres);
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/menu/QuitGameMenu.java ===
+package fr.github.tcgame.view.menu;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
+import fr.github.tcgame.control.MenuController;
+
+public class QuitGameMenu extends Menu {
+
+    public QuitGameMenu(MenuController controller) {
+        super(TypeMenu.QUIT_GAME, controller);
+    }
+
+    @Override
+    protected void build() {
+        Pixmap px = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        px.setColor(0f, 0f, 0f, 0.85f);
+        px.fill();
+        Image fond = new Image(new Texture(px));
+        px.dispose();
+        fond.setFillParent(true);
+        stage.addActor(fond);
+
+        addLabel("VRAIMENT QUITTER ?", WIDTH / 2f, HEIGHT * 0.65f, 36, OR_PALE);
+
+        float centreX = WIDTH / 2f;
+        float optY    = HEIGHT * 0.48f;
+        float gap     = HEIGHT * 0.07f;
+
+        addMenuOption("VERS LE MENU PRINCIPAL", centreX, optY, () -> {
+            playMenuOst();
+            controller.goMain();
+        });
+        addMenuOption("VERS LE BUREAU", centreX, optY - gap, () -> Gdx.app.exit());
+        addMenuOption("ANNULER",        centreX, optY - gap * 2, controller::goPause);
+
+        keyIsPressed(Input.Keys.ESCAPE, controller::goPause);
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/menu/QuitMenu.java ===
+package fr.github.tcgame.view.menu;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import fr.github.tcgame.control.MenuController;
+
+public class QuitMenu extends Menu {
+
+    public QuitMenu(MenuController controller) {
+        super(TypeMenu.QUIT, controller);
+    }
+
+    @Override
+    protected void build() {
+        setBackground("placeholder/BG_QuitMenu.jpg");
+
+        addMenuOption("QUITTER", 370f, 298f, () -> { Gdx.app.exit(); });
+        addMenuOption("RETOUR",  370f, 440f, controller::goMain);
+
+        keyIsPressed(Input.Keys.ESCAPE, controller::goMain);
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/menu/AudioPauseMenu.java ===
+package fr.github.tcgame.view.menu;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.ui.*;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
+import fr.github.tcgame.control.MenuController;
+
+public class AudioPauseMenu extends Menu {
+
+    public AudioPauseMenu(MenuController controller) {
+        super(TypeMenu.AUDIO_PAUSE, controller);
+    }
+
+    @Override
+    protected void build() {
+        Pixmap px = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        px.setColor(0f, 0f, 0f, 0.85f);
+        px.fill();
+        Image fond = new Image(new Texture(px));
+        px.dispose();
+        fond.setFillParent(true);
+        stage.addActor(fond);
+
+        addLabel("AUDIO", WIDTH / 2f, HEIGHT * 0.78f, 56, OR_PALE);
+
+        float labelX  = WIDTH / 2f - 250f;
+        float sliderX = WIDTH / 2f - 100f;
+        float startY  = HEIGHT * 0.58f;
+        float gap     = HEIGHT * 0.10f;
+
+        addSlider("VOLUME GENERAL",  labelX, sliderX, startY,            volumeMaster,  v -> { volumeMaster  = v; updateVolumes(); });
+        addSlider("MUSIQUE",         labelX, sliderX, startY - gap,      volumeMusique, v -> { volumeMusique = v; updateVolumes(); });
+        addSlider("EFFETS SONORES",  labelX, sliderX, startY - gap * 2,  volumeEffets,  v -> { volumeEffets  = v; });
+
+        addMenuOption("RETOUR", WIDTH / 2f, startY - gap * 3, controller::goParametresPause);
+
+        keyIsPressed(Input.Keys.ESCAPE, controller::goParametresPause);
+    }
+
+    private void addSlider(String labelText, float labelX, float sliderX, float y, float initialValue, java.util.function.Consumer<Float> onChange) {
+        BitmapFont font = cinzel(16, OR_PALE);
+        Label nameLabel = new Label(labelText, new Label.LabelStyle(font, OR_PALE));
+        nameLabel.setPosition(labelX, y + 5f);
+        stage.addActor(nameLabel);
+
+        Slider.SliderStyle sliderStyle = new Slider.SliderStyle();
+
+        Pixmap bgPx = new Pixmap(300, 6, Pixmap.Format.RGBA8888);
+        bgPx.setColor(GRIS_MENU);
+        bgPx.fill();
+        sliderStyle.background = new Image(new Texture(bgPx)).getDrawable();
+        bgPx.dispose();
+
+        Pixmap knobPx = new Pixmap(16, 16, Pixmap.Format.RGBA8888);
+        knobPx.setColor(OR_HOVER);
+        knobPx.fillCircle(8, 8, 8);
+        sliderStyle.knob = new Image(new Texture(knobPx)).getDrawable();
+        knobPx.dispose();
+
+        Slider slider = new Slider(0f, 1f, 0.01f, false, sliderStyle);
+        slider.setValue(initialValue);
+        slider.setSize(300f, 20f);
+        slider.setPosition(sliderX, y);
+        stage.addActor(slider);
+
+        BitmapFont fontPct = cinzel(14, GRIS_MENU);
+        Label pctLabel = new Label((int)(initialValue * 100) + "%", new Label.LabelStyle(fontPct, GRIS_MENU));
+        pctLabel.setPosition(sliderX + 315f, y + 2f);
+        stage.addActor(pctLabel);
+
+        slider.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                float val = slider.getValue();
+                pctLabel.setText((int)(val * 100) + "%");
+                if (onChange != null) onChange.accept(val);
+            }
+        });
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/menu/CollectionMenu.java ===
+package fr.github.tcgame.view.menu;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
+import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.InputEvent;
+import com.badlogic.gdx.scenes.scene2d.ui.*;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
+import fr.github.tcgame.control.MenuController;
+import fr.github.tcgame.model.card.Card;
+import fr.github.tcgame.model.card.CardFactory;
+
+import java.util.List;
+import java.util.stream.Collectors;
+
+public class CollectionMenu extends Menu {
+
+    private List<Card> allCards;
+    private List<Card> filteredCards;
+    private String searchText = "";
+    private Card.Family selectedFamily = null;
+
+    private static final Color CARD_BG    = new Color(0.12f, 0.10f, 0.08f, 0.95f);
+    private static final Color CARD_BORDER = new Color(0.76f, 0.67f, 0.49f, 1f);
+    private static final Color FILTRE_ON  = new Color(0.95f, 0.82f, 0.40f, 1f);
+    private static final Color FILTRE_OFF = new Color(0.63f, 0.63f, 0.63f, 1f);
+
+    public CollectionMenu(MenuController controller) {
+        super(TypeMenu.COLLECTION, controller);
+    }
+
+    @Override
+    protected void build() {
+        // Fond noir
+        Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        pixmap.setColor(Color.BLACK);
+        pixmap.fill();
+        Texture blackTex = new Texture(pixmap);
+        pixmap.dispose();
+        Image blackBg = new Image(blackTex);
+        blackBg.setFillParent(true);
+        stage.addActor(blackBg);
+
+        setBackground("placeholder/BG_MainMenu.jpg");
+
+        // Charger les cartes
+        allCards = CardFactory.createAllCards();
+        filteredCards = allCards;
+
+        // Cartes en premier (derrière)
+        buildCards();
+
+        // Titre par dessus
+        addLabel("COLLECTION", WIDTH / 2f, HEIGHT - 55f, 48, OR_PALE);
+
+        // Barre de recherche
+        buildSearchBar();
+
+        // Filtres familles
+        buildFamilyFilters();
+
+        // Bouton retour par dessus tout
+        addMenuOption("RETOUR", 80f, 30f, controller::goMain);
+
+        keyIsPressed(Input.Keys.ESCAPE, controller::goMain);
+    }
+
+    private void buildSearchBar() {
+        BitmapFont font = cinzel(14, Color.WHITE);
+        TextField.TextFieldStyle style = new TextField.TextFieldStyle();
+        style.font      = font;
+        style.fontColor = Color.WHITE;
+
+        Pixmap px = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        px.setColor(0.15f, 0.13f, 0.10f, 1f);
+        px.fill();
+        Texture bgTex = new Texture(px);
+        px.dispose();
+        style.background = new Image(bgTex).getDrawable();
+
+        // Curseur
+        Pixmap cursorPx = new Pixmap(2, 20, Pixmap.Format.RGBA8888);
+        cursorPx.setColor(OR_PALE);
+        cursorPx.fill();
+        style.cursor = new Image(new Texture(cursorPx)).getDrawable();
+
+        TextField searchBar = new TextField("", style);
+        searchBar.setSize(280f, 30f);
+        searchBar.setPosition(WIDTH / 2f - 140f, HEIGHT - 100f);
+        searchBar.setMessageText("  Rechercher...");
+
+        searchBar.setTextFieldListener((field, c) -> {
+            searchText = field.getText().toLowerCase();
+            refreshCards();
+        });
+
+        stage.addActor(searchBar);
+    }
+
+    private void buildFamilyFilters() {
+        Card.Family[] families = Card.Family.values();
+        float totalW = families.length * 130f;
+        float startX = WIDTH / 2f - totalW / 2f;
+        float y = HEIGHT - 130f;
+
+        for (int i = 0; i < families.length; i++) {
+            Card.Family family = families[i];
+            float x = startX + i * 130f;
+            addFamilyButton(family.name(), x, y, family);
+        }
+    }
+
+    private void addFamilyButton(String text, float x, float y, Card.Family family) {
+        FreeTypeFontGenerator gen = new FreeTypeFontGenerator(
+            Gdx.files.internal("fonts/Cinzel-Regular.ttf")
+        );
+        FreeTypeFontGenerator.FreeTypeFontParameter p = new FreeTypeFontGenerator.FreeTypeFontParameter();
+        p.size = 12;
+        p.color = FILTRE_OFF;
+        BitmapFont fontOff = gen.generateFont(p);
+        p.color = FILTRE_ON;
+        BitmapFont fontOn = gen.generateFont(p);
+        gen.dispose();
+
+        Label.LabelStyle styleOff = new Label.LabelStyle(fontOff, FILTRE_OFF);
+        Label.LabelStyle styleOn  = new Label.LabelStyle(fontOn,  FILTRE_ON);
+
+        Label label = new Label(text, styleOff);
+        label.setPosition(x, y);
+
+        label.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float mx, float my) {
+                if (selectedFamily == family) {
+                    selectedFamily = null;
+                    label.setStyle(styleOff);
+                } else {
+                    selectedFamily = family;
+                    label.setStyle(styleOn);
+                }
+                refreshCards();
+            }
+        });
+
+        stage.addActor(label);
+    }
+
+    private void refreshCards() {
+        filteredCards = allCards.stream()
+            .filter(c -> searchText.isEmpty() || c.getName().toLowerCase().contains(searchText))
+            .filter(c -> selectedFamily == null || c.getFamily() == selectedFamily)
+            .collect(Collectors.toList());
+        buildCards();
+    }
+
+    private void buildCards() {
+        // Supprimer anciennes cartes
+        com.badlogic.gdx.utils.Array<Actor> toRemove = new com.badlogic.gdx.utils.Array<>();
+        for (Actor a : stage.getActors()) {
+            if ("card".equals(a.getName())) toRemove.add(a);
+        }
+        for (Actor a : toRemove) a.remove();
+
+        float cardW  = 190f;
+        float cardH  = 130f;
+        float padX   = 15f;
+        float padY   = 15f;
+        float startX = 30f;
+        float startY = HEIGHT - 400f;
+        int   cols   = 6;
+
+        for (int i = 0; i < filteredCards.size(); i++) {
+            Card card = filteredCards.get(i);
+            int col = i % cols;
+            int row = i / cols;
+            float x = startX + col * (cardW + padX);
+            float y = startY - row * (cardH + padY);
+            buildCardActor(card, x, y, cardW, cardH);
+        }
+    }
+
+    private void buildCardActor(Card card, float x, float y, float w, float h) {
+        // Fond carte
+        Pixmap px = new Pixmap((int) w, (int) h, Pixmap.Format.RGBA8888);
+        px.setColor(CARD_BG);
+        px.fill();
+        px.setColor(CARD_BORDER);
+        px.drawRectangle(0, 0, (int) w, (int) h);
+        Image cardImg = new Image(new Texture(px));
+        px.dispose();
+        cardImg.setName("card");
+        cardImg.setPosition(x, y);
+        cardImg.setSize(w, h);
+        stage.addActor(cardImg);
+
+        Color typeColor = getTypeColor(card.getType());
+
+        // Nom
+        BitmapFont fontName = cinzel(12, typeColor);
+        Label nameLabel = new Label(card.getName(), new Label.LabelStyle(fontName, typeColor));
+        nameLabel.setName("card");
+        nameLabel.setPosition(x + 8f, y + h - 20f);
+        stage.addActor(nameLabel);
+
+        // Famille
+        BitmapFont fontInfo = cinzel(10, GRIS_MENU);
+        Label.LabelStyle infoStyle = new Label.LabelStyle(fontInfo, GRIS_MENU);
+
+        Label familyLabel = new Label(card.getFamily().name(), infoStyle);
+        familyLabel.setName("card");
+        familyLabel.setPosition(x + 8f, y + h - 36f);
+        stage.addActor(familyLabel);
+
+        if (card.getHp() > 0) {
+            Label hpLabel = new Label("HP: " + card.getHp(), infoStyle);
+            hpLabel.setName("card");
+            hpLabel.setPosition(x + 8f, y + h - 52f);
+            stage.addActor(hpLabel);
+
+            Label coutLabel = new Label("Cout: " + card.getCost(), infoStyle);
+            coutLabel.setName("card");
+            coutLabel.setPosition(x + 8f, y + h - 68f);
+            stage.addActor(coutLabel);
+        } else {
+            BitmapFont fontDesc = cinzel(9, GRIS_MENU);
+            Label descLabel = new Label(card.getDescription(), new Label.LabelStyle(fontDesc, GRIS_MENU));
+            descLabel.setName("card");
+            descLabel.setWrap(true);
+            descLabel.setSize(w - 16f, h - 40f);
+            descLabel.setPosition(x + 8f, y + 8f);
+            stage.addActor(descLabel);
+        }
+
+        // Clic pour détails
+        cardImg.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float mx, float my) {
+                showCardDetails(card);
+            }
+        });
+    }
+
+    private Color getTypeColor(Card.Type type) {
+        return switch (type) {
+            case LEGENDAIRE    -> new Color(1f, 0.84f, 0f, 1f);
+            case RARE          -> new Color(0.4f, 0.6f, 1f, 1f);
+            case TASTY_CROUSTY -> new Color(1f, 0.3f, 0.3f, 1f);
+            case OBJET         -> new Color(0.6f, 0.9f, 0.6f, 1f);
+            case EVENT         -> new Color(0.9f, 0.5f, 0.9f, 1f);
+            default            -> new Color(0.85f, 0.85f, 0.85f, 1f);
+        };
+    }
+
+    private void showCardDetails(Card card) {
+        overlay.clearChildren();
+        overlay.setVisible(true);
+
+        Pixmap px = new Pixmap(500, 360, Pixmap.Format.RGBA8888);
+        px.setColor(0.08f, 0.06f, 0.04f, 0.97f);
+        px.fill();
+        px.setColor(CARD_BORDER);
+        px.drawRectangle(0, 0, 500, 360);
+        Image bg = new Image(new Texture(px));
+        px.dispose();
+        bg.setSize(500, 360);
+        bg.setPosition(WIDTH / 2f - 250f, HEIGHT / 2f - 180f);
+        overlay.addActor(bg);
+
+        float ox = WIDTH / 2f - 230f;
+        float oy = HEIGHT / 2f + 145f;
+
+        addOverlayLabel(card.getName(), ox, oy, 20, getTypeColor(card.getType()));
+        addOverlayLabel(card.getFamily().name() + " — " + card.getType().name(), ox, oy - 30f, 12, GRIS_MENU);
+        addOverlayLabel(card.getDescription(), ox, oy - 60f, 12, Color.WHITE);
+
+        if (card.getHp() > 0) {
+            addOverlayLabel("HP : "   + card.getHp(),   ox, oy - 100f, 13, Color.WHITE);
+            addOverlayLabel("Cout : " + card.getCost(), ox, oy - 125f, 13, Color.WHITE);
+            if (card.getNormalAtk() != null)
+                addOverlayLabel("Attaque : " + card.getNormalAtk().getName(), ox, oy - 155f, 12, Color.WHITE);
+            if (card.getSpecialAtk() != null)
+                addOverlayLabel("Special : " + card.getSpecialAtk().getName(), ox, oy - 178f, 12, Color.WHITE);
+        }
+
+        BitmapFont font = cinzel(14, OR_HOVER);
+        Label close = new Label("[ FERMER ]", new Label.LabelStyle(font, OR_HOVER));
+        close.setPosition(WIDTH / 2f - 45f, HEIGHT / 2f - 160f);
+        close.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float mx, float my) {
+                overlay.setVisible(false);
+            }
+        });
+        overlay.addActor(close);
+    }
+
+    private void addOverlayLabel(String text, float x, float y, int size, Color color) {
+        BitmapFont font = cinzel(size, color);
+        Label label = new Label(text, new Label.LabelStyle(font, color));
+        label.setPosition(x, y);
+        overlay.addActor(label);
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/menu/AudioMenu.java ===
+package fr.github.tcgame.view.menu;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.ui.*;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
+import fr.github.tcgame.control.MenuController;
+
+public class AudioMenu extends Menu {
+
+    public AudioMenu(MenuController controller) {
+        super(TypeMenu.AUDIO, controller);
+    }
+
+    @Override
+    protected void build() {
+        Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        pixmap.setColor(Color.BLACK);
+        pixmap.fill();
+        Texture blackTex = new Texture(pixmap);
+        pixmap.dispose();
+        Image blackBg = new Image(blackTex);
+        blackBg.setFillParent(true);
+        stage.addActor(blackBg);
+
+        setBackground("placeholder/BG_MainMenu.jpg");
+
+        addLabel("AUDIO", WIDTH / 2f, HEIGHT * 0.78f, 56, OR_PALE);
+
+        float labelX  = WIDTH / 2f - 250f;
+        float sliderX = WIDTH / 2f - 100f;
+        float startY  = HEIGHT * 0.58f;
+        float gap     = HEIGHT * 0.10f;
+
+        addSlider("VOLUME GENERAL",  labelX, sliderX, startY,          volumeMaster,  v -> { volumeMaster  = v; updateVolumes(); });
+        addSlider("MUSIQUE",         labelX, sliderX, startY - gap,     volumeMusique, v -> { volumeMusique = v; updateVolumes(); });
+        addSlider("EFFETS SONORES",  labelX, sliderX, startY - gap * 2, volumeEffets,  v -> { volumeEffets  = v; });
+
+        addMenuOption("RETOUR", WIDTH / 2f, startY - gap * 3, controller::goParametres);
+
+        keyIsPressed(Input.Keys.ESCAPE, controller::goParametres);
+    }
+
+    private void addSlider(String labelText, float labelX, float sliderX, float y, float initialValue, java.util.function.Consumer<Float> onChange) {
+        // Label nom
+        BitmapFont font = cinzel(16, OR_PALE);
+        Label nameLabel = new Label(labelText, new Label.LabelStyle(font, OR_PALE));
+        nameLabel.setPosition(labelX, y + 5f);
+        stage.addActor(nameLabel);
+
+        // Style slider
+        Slider.SliderStyle sliderStyle = new Slider.SliderStyle();
+
+        Pixmap bgPx = new Pixmap(300, 6, Pixmap.Format.RGBA8888);
+        bgPx.setColor(GRIS_MENU);
+        bgPx.fill();
+        sliderStyle.background = new Image(new Texture(bgPx)).getDrawable();
+        bgPx.dispose();
+
+        Pixmap knobPx = new Pixmap(16, 16, Pixmap.Format.RGBA8888);
+        knobPx.setColor(OR_HOVER);
+        knobPx.fillCircle(8, 8, 8);
+        sliderStyle.knob = new Image(new Texture(knobPx)).getDrawable();
+        knobPx.dispose();
+
+        Slider slider = new Slider(0f, 1f, 0.01f, false, sliderStyle);
+        slider.setValue(initialValue);
+        slider.setSize(300f, 20f);
+        slider.setPosition(sliderX, y);
+        stage.addActor(slider);
+
+        // Pourcentage
+        BitmapFont fontPct = cinzel(14, GRIS_MENU);
+        Label pctLabel = new Label((int)(initialValue * 100) + "%", new Label.LabelStyle(fontPct, GRIS_MENU));
+        pctLabel.setPosition(sliderX + 315f, y + 2f);
+        stage.addActor(pctLabel);
+
+        slider.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                float val = slider.getValue();
+                pctLabel.setText((int)(val * 100) + "%");
+                if (onChange != null) onChange.accept(val);
+            }
+        });
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/menu/ParametresPauseMenu.java ===
+package fr.github.tcgame.view.menu;
+
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
+import fr.github.tcgame.control.MenuController;
+
+public class ParametresPauseMenu extends Menu {
+
+    public ParametresPauseMenu(MenuController controller) {
+        super(TypeMenu.PARAMETRES_PAUSE, controller);
+    }
+
+    @Override
+    protected void build() {
+        Pixmap px = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        px.setColor(0f, 0f, 0f, 0.85f);
+        px.fill();
+        Image fond = new Image(new Texture(px));
+        px.dispose();
+        fond.setFillParent(true);
+        stage.addActor(fond);
+
+        addLabel("PARAMETRES", WIDTH / 2f, HEIGHT * 0.72f, 56, OR_PALE);
+
+        float centreX = WIDTH / 2f;
+        float optY    = HEIGHT * 0.55f;
+        float gap     = HEIGHT * 0.07f;
+
+        addMenuOption("AUDIO",    centreX, optY,         controller::goAudioPause);
+        addMenuOption("CONTROLES",centreX, optY - gap,   controller::goControlesPause);
+        addMenuOption("RETOUR",   centreX, optY - gap*2, controller::goPause);
+
+        keyIsPressed(Input.Keys.ESCAPE, controller::goPause);
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/menu/ParametresMenu.java ===
+package fr.github.tcgame.view.menu;
+
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
+import fr.github.tcgame.control.MenuController;
+
+public class ParametresMenu extends Menu {
+
+    public ParametresMenu(MenuController controller) {
+        super(TypeMenu.PARAMETRES, controller);
+    }
+
+    @Override
+    protected void build() {
+        Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        pixmap.setColor(Color.BLACK);
+        pixmap.fill();
+        Texture blackTex = new Texture(pixmap);
+        pixmap.dispose();
+        Image blackBg = new Image(blackTex);
+        blackBg.setFillParent(true);
+        stage.addActor(blackBg);
+
+        setBackground("placeholder/BG_MainMenu.jpg");
+
+        addLabel("PARAMETRES", WIDTH / 2f, HEIGHT * 0.65f, 72, OR_PALE);
+
+        float centreX = WIDTH / 2f;
+        float optY    = HEIGHT * 0.45f;
+        float gap     = HEIGHT * 0.04f;
+
+        addMenuOption("AUDIO",    centreX, optY,         controller::goAudio);
+        addMenuOption("CONTROLES",centreX, optY - gap,   controller::goControles);
+        addMenuOption("RETOUR",   centreX, optY - gap*2, controller::goMain);
+
+        keyIsPressed(Input.Keys.ESCAPE, controller::goMain);
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/menu/JouerMenu.java ===
+package fr.github.tcgame.view.menu;
+
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
+import fr.github.tcgame.control.MenuController;
+
+public class JouerMenu extends Menu {
+
+    public JouerMenu(MenuController controller) {
+        super(TypeMenu.JOUER, controller);
+    }
+
+    @Override
+    protected void build() {
+        Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        pixmap.setColor(Color.BLACK);
+        pixmap.fill();
+        Texture blackTex = new Texture(pixmap);
+        pixmap.dispose();
+        Image blackBg = new Image(blackTex);
+        blackBg.setFillParent(true);
+        stage.addActor(blackBg);
+
+        setBackground("placeholder/BG_MainMenu.jpg");
+
+        addLabel("JOUER", WIDTH / 2f, HEIGHT * 0.65f, 72, OR_PALE);
+
+        float centreX = WIDTH / 2f;
+        float optY    = HEIGHT * 0.45f;
+        float gap     = HEIGHT * 0.04f;
+
+        addMenuOption("SOLO", centreX, optY, () -> {
+            if (clickSound != null) clickSound.play(volumeMaster * volumeEffets);
+            controller.goGame();
+        });
+        addMenuOption("DUEL", centreX, optY - gap, () -> {
+            if (clickSound != null) clickSound.play(volumeMaster * volumeEffets);
+            controller.goDuel();
+        });
+        addMenuOption("RETOUR", centreX, optY - gap * 2, controller::goMain);
+
+        keyIsPressed(Input.Keys.ESCAPE, controller::goMain);
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/menu/SplashMenu.java ===
+package fr.github.tcgame.view.menu;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.scenes.scene2d.InputEvent;
+import com.badlogic.gdx.scenes.scene2d.InputListener;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
+import fr.github.tcgame.control.MenuController;
+
+public class SplashMenu extends Menu {
+
+    private float timer = 0f;
+    private boolean blink = true;
+    private float blinkTimer = 0f;
+
+    public SplashMenu(MenuController controller) {
+        super(TypeMenu.SPLASH, controller);
+    }
+
+    @Override
+    protected void build() {
+        // Fond noir
+        Pixmap pixmap = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        pixmap.setColor(Color.BLACK);
+        pixmap.fill();
+        Image blackBg = new Image(new Texture(pixmap));
+        pixmap.dispose();
+        blackBg.setFillParent(true);
+        stage.addActor(blackBg);
+
+        // Image de fond
+        setBackground("placeholder/BG_MainMenu.jpg");
+
+        // Titre
+        addLabel("TASTY CROUSTY", WIDTH / 2f, HEIGHT * 0.65f, 72, OR_PALE);
+
+        // Texte clignotant
+        addMenuOption("APPUYEZ SUR UNE TOUCHE", WIDTH / 2f, HEIGHT * 0.35f, controller::goMain);
+
+        // N'importe quelle touche
+        stage.addListener(new InputListener() {
+            @Override
+            public boolean keyDown(InputEvent event, int keycode) {
+                if (clickSound != null) clickSound.play(volumeMaster * volumeEffets);
+                controller.goMain();
+                return true;
+            }
+
+            @Override
+            public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
+                if (clickSound != null) clickSound.play(volumeMaster * volumeEffets);
+                controller.goMain();
+                return true;
+            }
+        });
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/card/CardView.java ===
+package fr.github.tcgame.view.card;
+
+public class CardView {
+    
+}
+=== ./core/src/main/java/fr/github/tcgame/view/game/GameView.java ===
+package fr.github.tcgame.view.game;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.scenes.scene2d.InputEvent;
+import com.badlogic.gdx.scenes.scene2d.InputListener;
+import com.badlogic.gdx.scenes.scene2d.ui.Image;
+import com.badlogic.gdx.scenes.scene2d.ui.Label;
+import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
+import fr.github.tcgame.control.MenuController;
+import fr.github.tcgame.model.GameModel;
+import fr.github.tcgame.model.card.Card;
+import fr.github.tcgame.model.player.Crystal;
+import fr.github.tcgame.model.player.Player;
+import fr.github.tcgame.view.menu.Menu;
+
+import java.util.List;
+
+public class GameView extends Menu {
+
+    // ── Constantes layout ──────────────────────────────────────────────────────
+    private static final float COUNTDOWN_MAX = 10f;
+
+    // Cartes terrain
+    private static final float FIELD_CARD_W   = 100f;
+    private static final float FIELD_CARD_H   = 140f;
+    private static final float FIELD_CARD_PAD = 20f;
+
+    // Cartes main
+    private static final float HAND_CARD_W   = 90f;
+    private static final float HAND_CARD_H   = 126f;
+    private static final float HAND_CARD_PAD = 14f;
+
+    // Zones Y
+    private static final float IA_FIELD_Y     = HEIGHT * 0.56f;
+    private static final float JOUEUR_FIELD_Y = HEIGHT * 0.22f;
+    private static final float HAND_Y         = 10f;
+
+    // ── Textures / modèle ─────────────────────────────────────────────────────
+    private Texture gearTex;
+    private Texture crystalIATex;
+    private Texture crystalJoueurTex;
+
+    private GameModel gameModel;
+    private Player player;
+    private Player ia;
+
+    // ── Labels état ───────────────────────────────────────────────────────────
+    private Label labelCristalJoueur;
+    private Label labelCristalIA;
+    private Label labelManaJoueur;
+    private Label labelManaIA;
+    private Label labelTour;
+    private Label labelPhase;
+    private Label labelFinPartie;
+    private Label labelCountdown;
+
+    // ── État de jeu ───────────────────────────────────────────────────────────
+    private boolean gameOver       = false;
+    private boolean soundPlayed    = false;
+    private float   countdownTimer = COUNTDOWN_MAX;
+
+    // ── Phase de jeu du joueur humain ─────────────────────────────────────────
+    // PHASE 1 : déployer une carte depuis la main vers le banc
+    // PHASE 2 : choisir la carte active depuis le banc (si pas encore active)
+    // PHASE 3 : attaquer (normal / spécial)
+    // PHASE 4 : tour IA puis recommencer
+    private enum Phase { DEPLOY, SET_ACTIVE, ATTACK, IA_TURN }
+    private Phase phase = Phase.DEPLOY;
+
+    private Card selectedHandCard   = null; // carte sélectionnée dans la main
+    private Card selectedBenchCard  = null; // carte sélectionnée sur le banc
+
+    // ── Groupes d'acteurs pour le rendu dynamique ─────────────────────────────
+    // On les recrée à chaque redraw pour rester simple
+    private final com.badlogic.gdx.scenes.scene2d.Group handGroup  = new com.badlogic.gdx.scenes.scene2d.Group();
+    private final com.badlogic.gdx.scenes.scene2d.Group fieldGroup = new com.badlogic.gdx.scenes.scene2d.Group();
+
+    public GameView(MenuController controller) {
+        super(TypeMenu.GAME, controller);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // BUILD
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    @Override
+    protected void build() {
+        playGameOst();
+
+        setBackground("placeholder/BG_GameView.png");
+        buildBoardZones();
+
+        gearTex          = new Texture(Gdx.files.internal("ui/gear.png"));
+        crystalIATex     = new Texture(Gdx.files.internal("ui/crystal_opponent.png"));
+        crystalJoueurTex = new Texture(Gdx.files.internal("ui/crystal_player.png"));
+
+        gameModel = new GameModel("Joueur", "IA");
+        gameModel.init();
+        player = gameModel.getPlayer1();
+        ia     = gameModel.getPlayer2();
+
+        // Démarre le premier tour (pioche + mana)
+        gameModel.startTurn();
+
+        buildStaticUI();
+
+        // Groupes dynamiques
+        stage.addActor(fieldGroup);
+        stage.addActor(handGroup);
+
+        // Fin de partie (cachés)
+        labelFinPartie = mkLabel("", WIDTH / 2f, HEIGHT / 2f, 72, Color.WHITE);
+        labelFinPartie.setVisible(false);
+        labelCountdown = mkLabel("", WIDTH / 2f, HEIGHT / 2f - 80f, 20, Color.WHITE);
+        labelCountdown.setVisible(false);
+
+        // Engrenage (pause) tout en haut
+        Image gear = new Image(gearTex);
+        gear.setSize(40f, 40f);
+        gear.setPosition(15f, HEIGHT - 55f);
+        gear.addListener(new ClickListener() {
+            @Override public void clicked(InputEvent e, float x, float y) { controller.goPause(); }
+        });
+        stage.addActor(gear);
+
+        // Touche ESC = pause
+        keyIsPressed(Input.Keys.ESCAPE, controller::goPause);
+
+        // Refresh initial
+        refreshDynamic();
+
+        System.out.println("[GAMEVIEW] Build terminé. Phase: DEPLOY");
+    }
+
+    // ── UI statique (cristaux, labels) ────────────────────────────────────────
+
+    private void buildStaticUI() {
+        float scaleIA     = 0.22f;
+        float scaleJoueur = 0.22f;
+        float cristalX    = 10f;
+        float cristalIAW  = crystalIATex.getWidth()  * scaleIA;
+        float cristalIAH  = crystalIATex.getHeight() * scaleIA;
+        float cristalJW   = crystalJoueurTex.getWidth()  * scaleJoueur;
+        float cristalJH   = crystalJoueurTex.getHeight() * scaleJoueur;
+
+        // Cristal IA
+        Image crystalIA = new Image(crystalIATex);
+        crystalIA.setSize(cristalIAW, cristalIAH);
+        crystalIA.setPosition(cristalX, HEIGHT - cristalIAH - 30f);
+        stage.addActor(crystalIA);
+        labelCristalIA = mkLabel("100 / 100 PV", cristalX + cristalIAW / 2f, HEIGHT - cristalIAH - 55f, 14, Color.RED);
+        labelManaIA    = mkLabel("Mana: 0/10",   cristalX + cristalIAW / 2f, HEIGHT - cristalIAH - 75f, 12, new Color(0.4f, 0.8f, 1f, 1f));
+
+        // Cristal Joueur
+        Image crystalJoueur = new Image(crystalJoueurTex);
+        crystalJoueur.setSize(cristalJW, cristalJH);
+        crystalJoueur.setPosition(cristalX, 160f);
+        stage.addActor(crystalJoueur);
+        labelCristalJoueur = mkLabel("100 / 100 PV", cristalX + cristalJW / 2f, 140f, 14, Color.GREEN);
+        labelManaJoueur    = mkLabel("Mana: 0/10",   cristalX + cristalJW / 2f, 120f, 12, new Color(0.4f, 0.8f, 1f, 1f));
+
+        // Tour + phase
+        labelTour  = mkLabel("Tour 1", WIDTH / 2f, HEIGHT - 30f, 16, OR_PALE);
+        labelPhase = mkLabel("Phase: DEPLOYER", WIDTH / 2f, HEIGHT - 55f, 13, GRIS_MENU);
+
+        // Bouton "Fin de tour" (passer à l'IA si on a fini)
+        addMenuOption("FIN DE TOUR", WIDTH - 100f, 80f, this::endPlayerTurn);
+
+        // Bouton "Attaque normale" et "Attaque spéciale"
+        addMenuOption("ATK NORMALE",  WIDTH - 110f, HEIGHT * 0.38f,        () -> playerAttack(false));
+        addMenuOption("ATK SPECIALE", WIDTH - 110f, HEIGHT * 0.38f - 40f,  () -> playerAttack(true));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // REFRESH DYNAMIQUE (main + terrain)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private void refreshDynamic() {
+        handGroup.clearChildren();
+        fieldGroup.clearChildren();
+        buildHandCards();
+        buildFieldCards();
+        updateLabels();
+    }
+
+    // ── Main du joueur ────────────────────────────────────────────────────────
+
+    private void buildHandCards() {
+        List<Card> hand = player.getHand();
+        float totalW = hand.size() * (HAND_CARD_W + HAND_CARD_PAD) - HAND_CARD_PAD;
+        float startX = WIDTH / 2f - totalW / 2f;
+
+        for (int i = 0; i < hand.size(); i++) {
+            Card card = hand.get(i);
+            float x = startX + i * (HAND_CARD_W + HAND_CARD_PAD);
+            buildHandCardActor(card, x, HAND_Y, i);
+        }
+    }
+
+    private void buildHandCardActor(Card card, float x, float y, int idx) {
+        boolean selected = card == selectedHandCard;
+        Color bg = selected
+            ? new Color(0.5f, 0.4f, 0.1f, 0.95f)
+            : new Color(0.12f, 0.10f, 0.08f, 0.92f);
+
+        Image cardImg = makeCardRect((int) HAND_CARD_W, (int) HAND_CARD_H, bg, OR_PALE);
+        cardImg.setPosition(x, selected ? y + 10f : y);
+        handGroup.addActor(cardImg);
+
+        // Texte nom
+        addGroupLabel(handGroup, card.getName(), x + 5f, y + HAND_CARD_H - 18f + (selected ? 10f : 0f), 10, getTypeColor(card.getType()));
+        // Famille
+        addGroupLabel(handGroup, card.getFamily().name(), x + 5f, y + HAND_CARD_H - 32f + (selected ? 10f : 0f), 9, GRIS_MENU);
+        // HP
+        addGroupLabel(handGroup, "HP: " + card.getHp(), x + 5f, y + HAND_CARD_H - 47f + (selected ? 10f : 0f), 9, GRIS_MENU);
+        // Coût
+        addGroupLabel(handGroup, "Cout: " + card.getCost(), x + 5f, y + HAND_CARD_H - 60f + (selected ? 10f : 0f), 9, new Color(0.4f, 0.8f, 1f, 1f));
+        // Attaque normale
+        if (card.getNormalAtk() != null)
+            addGroupLabel(handGroup, card.getNormalAtk().getName() + " " + card.getNormalAtk().getDamage() + "dmg",
+                x + 5f, y + HAND_CARD_H - 76f + (selected ? 10f : 0f), 8, Color.WHITE);
+        // Attaque spéciale
+        if (card.getSpecialAtk() != null)
+            addGroupLabel(handGroup, card.getSpecialAtk().getName() + " " + card.getSpecialAtk().getDamage() + "dmg",
+                x + 5f, y + HAND_CARD_H - 90f + (selected ? 10f : 0f), 8, new Color(0.9f, 0.5f, 0.9f, 1f));
+
+        // Clic : sélectionner cette carte pour la déployer
+        cardImg.addListener(new ClickListener() {
+            @Override public void clicked(InputEvent e, float mx, float my) {
+                onHandCardClicked(card);
+            }
+        });
+    }
+
+    // ── Terrain (banc + carte active) des deux joueurs ────────────────────────
+
+    private void buildFieldCards() {
+        // IA (haut de l'écran)
+        buildPlayerField(ia,     IA_FIELD_Y,     false);
+        // Joueur (milieu bas)
+        buildPlayerField(player, JOUEUR_FIELD_Y, true);
+    }
+
+    private void buildPlayerField(Player p, float baseY, boolean isHuman) {
+        // Carte active
+        Card active = p.getActiveCard();
+        if (active != null) {
+            float x = WIDTH / 2f - FIELD_CARD_W / 2f;
+            buildFieldCardActor(active, x, baseY, isHuman, true);
+        }
+
+        // Banc
+        List<Card> bench = p.getBench();
+        float benchStartX = WIDTH / 2f - ((Player.MAX_BENCH_SIZE) * (FIELD_CARD_W + FIELD_CARD_PAD)) / 2f;
+        for (int i = 0; i < bench.size(); i++) {
+            float bx = benchStartX + i * (FIELD_CARD_W + FIELD_CARD_PAD);
+            float by = isHuman ? baseY - FIELD_CARD_H - 10f : baseY + FIELD_CARD_H + 10f;
+            buildFieldCardActor(bench.get(i), bx, by, isHuman, false);
+        }
+
+        // Label "ACTIF" / "BANC"
+        addGroupLabel(fieldGroup, isHuman ? "— VOS CARTES —" : "— IA —",
+            WIDTH / 2f - 50f,
+            isHuman ? baseY + FIELD_CARD_H + 5f : baseY - 20f,
+            11, isHuman ? OR_PALE : Color.RED);
+    }
+
+    private void buildFieldCardActor(Card card, float x, float y, boolean isHuman, boolean isActive) {
+        Color border = isActive
+            ? (isHuman ? new Color(0.95f, 0.82f, 0.40f, 1f) : Color.RED)
+            : GRIS_MENU;
+        boolean selectedForSwap = card == selectedBenchCard;
+        Color bg = selectedForSwap
+            ? new Color(0.4f, 0.3f, 0.05f, 0.95f)
+            : new Color(0.10f, 0.08f, 0.06f, 0.93f);
+
+        Image cardImg = makeCardRect((int) FIELD_CARD_W, (int) FIELD_CARD_H, bg, border);
+        cardImg.setPosition(x, y);
+        fieldGroup.addActor(cardImg);
+
+        float ty = y + FIELD_CARD_H - 18f;
+        addGroupLabel(fieldGroup, card.getName(),           x + 5f, ty,      11, getTypeColor(card.getType()));
+        addGroupLabel(fieldGroup, card.getFamily().name(),  x + 5f, ty - 16f, 9, GRIS_MENU);
+        addGroupLabel(fieldGroup, "HP: " + card.getCurrentHp() + "/" + card.getHp(), x + 5f, ty - 30f, 9,
+            card.isBelowHalfHp() ? Color.RED : Color.GREEN);
+        if (card.getNormalAtk() != null)
+            addGroupLabel(fieldGroup, card.getNormalAtk().getName() + " " + card.getNormalAtk().getDamage() + "dmg",
+                x + 5f, ty - 44f, 8, Color.WHITE);
+        if (card.getSpecialAtk() != null)
+            addGroupLabel(fieldGroup, card.getSpecialAtk().getName() + " " + card.getSpecialAtk().getDamage() + "dmg",
+                x + 5f, ty - 56f, 8, new Color(0.9f, 0.5f, 0.9f, 1f));
+
+        // Statuts
+        if (card.isFrozen())            addGroupLabel(fieldGroup, "[GELE]",   x + 5f, ty - 70f, 8, Color.CYAN);
+        if (card.hasTrap())             addGroupLabel(fieldGroup, "[TNT]",    x + 5f, ty - 80f, 8, Color.ORANGE);
+        if (card.getPoisonDamage() > 0) addGroupLabel(fieldGroup, "[POISON]", x + 5f, ty - 90f, 8, Color.GREEN);
+
+        // IsActive marker
+        addGroupLabel(fieldGroup, isActive ? "[ACTIF]" : "[BANC]", x + 5f, y + 5f, 8, border);
+
+        // Clic sur carte du banc du joueur = sélectionner pour swap
+        if (isHuman && !isActive) {
+            cardImg.addListener(new ClickListener() {
+                @Override public void clicked(InputEvent e, float mx, float my) {
+                    onBenchCardClicked(card);
+                }
+            });
+        }
+    }
+
+    // ── Mise à jour des labels état ───────────────────────────────────────────
+
+    private void updateLabels() {
+        Crystal cJ = player.getCrystal();
+        Crystal cI = ia.getCrystal();
+
+        labelCristalJoueur.setText(cJ.getCurrentHp() + " / " + Crystal.MAX_HP + " PV");
+        labelCristalIA.setText(cI.getCurrentHp() + " / " + Crystal.MAX_HP + " PV");
+        labelManaJoueur.setText("Mana: " + player.getMana() + "/" + Player.MAX_MANA);
+        labelManaIA.setText("Mana: " + ia.getMana() + "/" + Player.MAX_MANA);
+        labelTour.setText("Tour " + gameModel.getTurnNumber());
+
+        String phaseStr = switch (phase) {
+            case DEPLOY      -> "Déployez une carte de votre main (cliquez dessus)";
+            case SET_ACTIVE  -> "Choisissez la carte active parmi votre banc (cliquez sur le banc)";
+            case ATTACK      -> "Choisissez votre attaque ou passez le tour";
+            case IA_TURN     -> "Tour de l'IA...";
+        };
+        labelPhase.setText(phaseStr);
+        labelPhase.setPosition(WIDTH / 2f - labelPhase.getPrefWidth() / 2f, HEIGHT - 55f);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LOGIQUE JOUEUR
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private void onHandCardClicked(Card card) {
+        if (phase != Phase.DEPLOY && phase != Phase.SET_ACTIVE) {
+            System.out.println("[CLIC] Pas en phase DEPLOY/SET_ACTIVE, ignoré.");
+            return;
+        }
+        if (phase == Phase.DEPLOY) {
+            // Déployer sur le banc
+            if (gameModel.deployToBench(player, card)) {
+                selectedHandCard = null;
+                System.out.println("[JOUEUR] Carte déployée sur le banc.");
+                // Si pas encore de carte active, passer en SET_ACTIVE
+                if (!player.hasActiveCard()) {
+                    phase = Phase.SET_ACTIVE;
+                    System.out.println("[PHASE] -> SET_ACTIVE");
+                } else {
+                    phase = Phase.ATTACK;
+                    System.out.println("[PHASE] -> ATTACK");
+                }
+            } else {
+                // Sélection visuelle
+                selectedHandCard = (selectedHandCard == card) ? null : card;
+                System.out.println("[JOUEUR] Sélection: " + (selectedHandCard != null ? selectedHandCard.getName() : "aucune"));
+            }
+            refreshDynamic();
+        }
+    }
+
+    private void onBenchCardClicked(Card card) {
+        if (phase == Phase.SET_ACTIVE) {
+            // Mettre la carte en jeu (gratuit)
+            if (gameModel.playFromBenchFree(player, card)) {
+                selectedBenchCard = null;
+                phase = Phase.ATTACK;
+                System.out.println("[JOUEUR] Carte mise en jeu (gratuit). Phase -> ATTACK");
+                refreshDynamic();
+            }
+        } else if (phase == Phase.ATTACK) {
+            // Echanger la carte active (coûte 2 mana)
+            if (gameModel.swapActiveCard(player, card)) {
+                selectedBenchCard = null;
+                System.out.println("[JOUEUR] Echange effectué.");
+                refreshDynamic();
+            } else {
+                selectedBenchCard = (selectedBenchCard == card) ? null : card;
+                refreshDynamic();
+            }
+        }
+    }
+
+    private void playerAttack(boolean useSpecial) {
+        if (phase != Phase.ATTACK) {
+            System.out.println("[ATTAQUE] Pas en phase ATTACK, ignoré.");
+            return;
+        }
+        if (!player.hasActiveCard()) {
+            System.out.println("[ATTAQUE] Pas de carte active !");
+            return;
+        }
+        gameModel.resolveAttack(player, useSpecial);
+        refreshDynamic();
+
+        if (gameModel.isOver()) { handleGameOver(); return; }
+
+        // Après l'attaque, on passe directement au tour IA
+        System.out.println("[PHASE] -> IA_TURN");
+        phase = Phase.IA_TURN;
+        refreshDynamic();
+    }
+
+    private void endPlayerTurn() {
+        if (phase == Phase.IA_TURN) return; // déjà passé
+        System.out.println("[JOUEUR] Fin de tour volontaire.");
+        phase = Phase.IA_TURN;
+        refreshDynamic();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // LOGIQUE IA (très simple : déploie si possible, puis attaque)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private float iaDelay = 0f;
+    private static final float IA_THINK_TIME = 1.2f; // secondes de "réflexion"
+
+    private void runIaTurn() {
+        System.out.println("\n[IA] === Tour de l'IA ===");
+
+        // 1. Déployer une carte si banc non plein
+        List<Card> iaHand = ia.getHand();
+        for (Card c : iaHand) {
+            if (gameModel.deployToBench(ia, c)) break; // une seule par tour
+        }
+
+        // 2. Mettre une carte en jeu si pas de carte active
+        if (!ia.hasActiveCard() && !ia.getBench().isEmpty()) {
+            gameModel.playFromBenchFree(ia, ia.getBench().get(0));
+        }
+
+        // 3. Attaquer (préfère la spéciale si assez de mana)
+        if (ia.hasActiveCard()) {
+            Card iac = ia.getActiveCard();
+            boolean useSpecial = iac.getSpecialAtk() != null && ia.getMana() >= iac.getSpecialAtk().getCostMana();
+            gameModel.resolveAttack(ia, useSpecial);
+        }
+
+        System.out.println("[IA] Fin de tour IA.");
+
+        if (gameModel.isOver()) { handleGameOver(); return; }
+
+        // Nouveau tour
+        gameModel.startTurn();
+        phase = Phase.DEPLOY;
+
+        // Si le joueur n'a pas de carte active, forcer SET_ACTIVE
+        if (!player.hasActiveCard() && !player.getBench().isEmpty()) {
+            phase = Phase.SET_ACTIVE;
+        }
+
+        System.out.println("[PHASE] Nouveau tour -> " + phase);
+        refreshDynamic();
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // FIN DE PARTIE
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private void handleGameOver() {
+        gameOver = true;
+        labelFinPartie.setVisible(true);
+        labelCountdown.setVisible(true);
+        if (!soundPlayed) {
+            boolean joueurGagne = gameModel.getWinner() == player;
+            showResultat(joueurGagne ? "VICTOIRE" : "VOUS ETES MORT",
+                joueurGagne ? new Color(0.95f, 0.82f, 0.40f, 1f) : Color.RED);
+            if (joueurGagne) { if (victorySound != null) victorySound.play(volumeMaster * volumeEffets); }
+            else             { if (defeatSound  != null) defeatSound.play(volumeMaster * volumeEffets); }
+            soundPlayed = true;
+            if (ostGame != null) ostGame.stop();
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DRAW (appelé chaque frame)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    @Override
+    public void draw() {
+        if (ostGame != null && !ostGame.isPlaying() && !gameOver) playGameOst();
+
+        // Délai IA
+        if (phase == Phase.IA_TURN && !gameOver) {
+            iaDelay += Gdx.graphics.getDeltaTime();
+            if (iaDelay >= IA_THINK_TIME) {
+                iaDelay = 0f;
+                runIaTurn();
+            }
+        }
+
+        super.draw();
+
+        if (gameOver) {
+            countdownTimer -= Gdx.graphics.getDeltaTime();
+            int secondes = Math.max(0, (int) Math.ceil(countdownTimer));
+            labelCountdown.setText("Retour au menu dans " + secondes + "s...");
+            if (countdownTimer <= 0) {
+                playMenuOst();
+                controller.goMain();
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // HELPERS
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    private Label mkLabel(String text, float x, float y, int size, Color color) {
+        Label lbl = new Label(text, new Label.LabelStyle(cinzel(size, color), color));
+        lbl.setPosition(x - lbl.getPrefWidth() / 2f, y);
+        stage.addActor(lbl);
+        return lbl;
+    }
+
+    private void addGroupLabel(com.badlogic.gdx.scenes.scene2d.Group group,
+                               String text, float x, float y, int size, Color color) {
+        Label lbl = new Label(text, new Label.LabelStyle(cinzel(size, color), color));
+        lbl.setPosition(x, y);
+        group.addActor(lbl);
+    }
+
+    private Image makeCardRect(int w, int h, Color bg, Color border) {
+        Pixmap px = new Pixmap(w, h, Pixmap.Format.RGBA8888);
+        px.setColor(bg);
+        px.fill();
+        px.setColor(border);
+        px.drawRectangle(0, 0, w, h);
+        Image img = new Image(new Texture(px));
+        px.dispose();
+        img.setSize(w, h);
+        return img;
+    }
+
+    private Color getTypeColor(Card.Type type) {
+        return switch (type) {
+            case LEGENDAIRE    -> new Color(1f, 0.84f, 0f, 1f);
+            case RARE          -> new Color(0.4f, 0.6f, 1f, 1f);
+            case TASTY_CROUSTY -> new Color(1f, 0.3f, 0.3f, 1f);
+            case OBJET         -> new Color(0.6f, 0.9f, 0.6f, 1f);
+            case EVENT         -> new Color(0.9f, 0.5f, 0.9f, 1f);
+            default            -> new Color(0.85f, 0.85f, 0.85f, 1f);
+        };
+    }
+
+    private void showResultat(String texte, Color couleur) {
+        Pixmap px = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
+        px.setColor(0f, 0f, 0f, 0.6f);
+        px.fill();
+        Image fond = new Image(new Texture(px));
+        px.dispose();
+        fond.setFillParent(true);
+        stage.addActor(fond);
+
+        Label.LabelStyle style = new Label.LabelStyle(cinzel(72, couleur), couleur);
+        labelFinPartie.setStyle(style);
+        labelFinPartie.setText(texte);
+        labelFinPartie.setPosition(WIDTH / 2f - labelFinPartie.getPrefWidth() / 2f, HEIGHT / 2f);
+        stage.addActor(labelFinPartie);
+        labelCountdown.setPosition(WIDTH / 2f - 150f, HEIGHT / 2f - 80f);
+        stage.addActor(labelCountdown);
+    }
+
+    @Override
+    public void dispose() {
+        super.dispose();
+        if (gearTex != null)          gearTex.dispose();
+        if (crystalIATex != null)     crystalIATex.dispose();
+        if (crystalJoueurTex != null) crystalJoueurTex.dispose();
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/view/game/GameHUD.java ===
+package fr.github.tcgame.view.game;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.Pixmap;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.Batch;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.freetype.FreeTypeFontGenerator;
+import com.badlogic.gdx.scenes.scene2d.Group;
+import fr.github.tcgame.model.player.Crystal;
+import fr.github.tcgame.model.player.Player;
+
+public class GameHUD extends Group {
+    private static final float WIDTH = 1200f;
+    private static final float HEIGHT = 800f;
+
+    private static final Color OR_PALE = new Color(0.76f, 0.67f, 0.49f, 1f);
+    private static final Color GRIS_HUD  = new Color(0.63f, 0.63f, 0.63f, 1f);
+    private static final Color CRYSTAL_COLOR = new Color(0.4f, 0.8f, 1f, 1f);
+
+
+    private final Player player;
+    private final Player opponent;
+
+    private BitmapFont fontMedium;
+    private BitmapFont fontSmall;
+    private BitmapFont fontTour;
+
+    private int turnNumber;
+
+    private Texture barBg;
+    private Texture manaFull;
+    private Texture manaEmpty;
+
+    //Constructeur
+    public GameHUD(Player player, Player opponent){
+        this.player=player;
+        this.opponent=opponent;
+        this.turnNumber=1;
+        loadFonts();
+        buildStaticTextures();
+    }
+
+    private void loadFonts(){
+        FreeTypeFontGenerator gen = new FreeTypeFontGenerator(Gdx.files.internal("fonts/Cinzel-Regular.ttf"));
+        FreeTypeFontGenerator.FreeTypeFontParameter pm = new FreeTypeFontGenerator.FreeTypeFontParameter();
+        pm.size =18; pm.color = OR_PALE;
+        fontMedium = gen.generateFont(pm);
+
+        FreeTypeFontGenerator.FreeTypeFontParameter ps = new FreeTypeFontGenerator.FreeTypeFontParameter();
+        ps.size = 13; ps.color = GRIS_HUD;
+        fontSmall = gen.generateFont(ps);
+
+        FreeTypeFontGenerator.FreeTypeFontParameter pt = new FreeTypeFontGenerator.FreeTypeFontParameter();
+        pt.size = 13; ps.color = OR_PALE;
+        fontTour=gen.generateFont(pt);
+
+        gen.dispose();
+    }
+
+    private void buildStaticTextures(){
+
+    }
+
+
+
+
+}
+=== ./core/src/main/java/fr/github/tcgame/view/MainGame.java ===
+package fr.github.tcgame.view;
+
+import com.badlogic.gdx.ApplicationAdapter;
+
+import fr.github.tcgame.view.menu.Menu;
+import fr.github.tcgame.view.menu.MenuManager;
+
+public class MainGame
+
+    extends ApplicationAdapter {
+    private MenuManager menuManager;
+    @Override
+    public void create() {
+        menuManager = new MenuManager();
+        menuManager.changeMenu(Menu.TypeMenu.SPLASH);
+    }
+
+    @Override
+    public void render() {
+        menuManager.render();
+    }
+
+    @Override
+    public void dispose() {
+        menuManager.dispose();
+    }
+
+    @Override
+    public void resize(int width, int height) {
+        menuManager.resize(width, height);
+    }
+
+}
+=== ./core/src/main/java/fr/github/tcgame/control/MenuController.java ===
+package fr.github.tcgame.control;
+
+import fr.github.tcgame.view.menu.Menu;
+import fr.github.tcgame.view.menu.MenuManager;
+
+public class MenuController {
+    private MenuManager menuManager;
+
+    public MenuController(MenuManager menuManager) {
+        this.menuManager = menuManager;
+    }
+
+    public void goSplash()           { menuManager.changeMenu(Menu.TypeMenu.SPLASH); }
+    public void goMain()             { menuManager.changeMenu(Menu.TypeMenu.MAIN); }
+    public void goSelection()        { menuManager.changeMenu(Menu.TypeMenu.SELECTION); }
+    public void goJouer()            { menuManager.changeMenu(Menu.TypeMenu.JOUER); }
+    public void goSolo()             { menuManager.changeMenu(Menu.TypeMenu.GAME); }
+    public void goDuel()             { System.out.println("Duel !"); }
+    public void goParametres()       { menuManager.changeMenu(Menu.TypeMenu.PARAMETRES); }
+    public void goAudio()            { menuManager.changeMenu(Menu.TypeMenu.AUDIO); }
+    public void goControles()        { menuManager.changeMenu(Menu.TypeMenu.CONTROLES); }
+    public void goCollection()       { menuManager.changeMenu(Menu.TypeMenu.COLLECTION); }
+    public void goGame()             { menuManager.changeMenu(Menu.TypeMenu.GAME); }
+    public void goPause()            { menuManager.changeMenu(Menu.TypeMenu.PAUSE); }
+    public void goQuitGame()         { menuManager.changeMenu(Menu.TypeMenu.QUIT_GAME); }
+    public void goParametresPause()  { menuManager.changeMenu(Menu.TypeMenu.PARAMETRES_PAUSE); }
+    public void goAudioPause()       { menuManager.changeMenu(Menu.TypeMenu.AUDIO_PAUSE); }
+    public void goControlesPause()   { menuManager.changeMenu(Menu.TypeMenu.CONTROLES_PAUSE); }
+    public void quit()               { menuManager.changeMenu(Menu.TypeMenu.QUIT); }
+    public void playMusic()          { System.out.println("MESSAGE TEST"); }
+}
+=== ./core/src/main/java/fr/github/tcgame/model/deck/Deck.java ===
+package fr.github.tcgame.model.deck;
+
+import fr.github.tcgame.model.card.Card;
+
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.List;
+
+/**
+ * Pioche commune aux deux joueurs.
+ * Fonctionne comme une file FIFO :
+ *   - on pioche par le debut
+ *   - les cartes mortes retournent en fin de file
+ */
+
+public class Deck {
+
+    public static final int TOTAL_CARDS = 60;
+
+    private final Deque<Card> cards;
+
+    public Deck(){
+        this.cards=new ArrayDeque<>();
+    }
+
+    //Ajoute carte en fin de pioche (init)
+    public void addCard(Card card){
+        cards.addLast(card);
+    }
+
+    //Pioche la premiere carte
+    public Card draw(){
+        return cards.pollFirst();
+    }
+
+    public void putBack(Card card) {
+        cards.addLast(card);
+    }
+
+    public void shuffle(){
+        List<Card> list = new ArrayList<>(cards);
+        Collections.shuffle(list);
+        cards.clear();
+        cards.addAll(list);
+    }
+
+    public boolean isEmpty() { return cards.isEmpty(); }
+    public int size()        { return cards.size(); }
+
+    @Override
+    public String toString() {
+        return String.format("Pioche [%d cartes restantes]", cards.size());
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/model/card/CardFactory.java ===
+package fr.github.tcgame.model.card;
+
+import fr.github.tcgame.model.attack.Attack;
+import fr.github.tcgame.model.attack.AttackEffect;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class CardFactory {
+
+    public static List<Card> createAllCards() {
+        List<Card> cards = new ArrayList<>();
+
+        // === CAPITALISTES ===
+        cards.add(new Card("Stonks",
+            "Spécule sur tout, même sur ta défaite.",
+            Card.Type.RARE, Card.Family.CAPITALISTE, 15, 3,
+            new Attack("Spéculation", "Attaque standard.", 3, 2, AttackEffect.NONE, 0),
+            new Attack("To the Moon", "Dégâts x2 si l'ennemi a moins de 50% PV.", 6, 4, AttackEffect.FINAL_SENTENCE, 0)));
+
+        cards.add(new Card("Huissier",
+            "Vient chercher ce qui lui appartient.",
+            Card.Type.COMMUN, Card.Family.CAPITALISTE, 12, 2,
+            new Attack("Mise en demeure", "Attaque standard.", 2, 1, AttackEffect.NONE, 0),
+            new Attack("Sommation", "Dégâts + vole 2 mana à l'adversaire.", 4, 3, AttackEffect.STEAL_COINS, 2)));
+
+        cards.add(new Card("Actionnaire",
+            "Investit dans la destruction.",
+            Card.Type.COMMUN, Card.Family.CAPITALISTE, 10, 2,
+            new Attack("Dividendes", "Attaque standard.", 2, 1, AttackEffect.NONE, 0),
+            new Attack("Plus-value", "Réduit le coût du prochain déploiement de 2.", 3, 3, AttackEffect.REDUCE_DEPLOY_COST, 2)));
+
+        // === MAUDITS ===
+        cards.add(new Card("Corbeau",
+            "Augure de mauvais présage.",
+            Card.Type.COMMUN, Card.Family.MAUDIT, 8, 2,
+            new Attack("Bec acéré", "Attaque standard.", 2, 1, AttackEffect.NONE, 0),
+            new Attack("Augure", "La prochaine attaque ennemie a 50% de rater.", 1, 3, AttackEffect.MISS_CHANCE, 50)));
+
+        cards.add(new Card("Modo",
+            "Silencieux, mais venimeux.",
+            Card.Type.RARE, Card.Family.MAUDIT, 18, 4,
+            new Attack("Griffure", "Attaque standard.", 3, 2, AttackEffect.NONE, 0),
+            new Attack("Venin", "Inflige 2 dégâts par tour tant qu'il est en jeu.", 2, 4, AttackEffect.POISON, 2)));
+
+        cards.add(new Card("Bourreau",
+            "Execute les ennemis affaiblis.",
+            Card.Type.RARE, Card.Family.MAUDIT, 14, 3,
+            new Attack("Lame", "Attaque standard.", 3, 2, AttackEffect.NONE, 0),
+            new Attack("Sentence Finale", "8 dégâts, uniquement si l'ennemi a moins de 50% PV.", 8, 3, AttackEffect.FINAL_SENTENCE, 0)));
+
+        // === PRODIGES ===
+        cards.add(new Card("Electricien",
+            "Court-circuite ses propres neurones.",
+            Card.Type.COMMUN, Card.Family.PRODIGE, 10, 2,
+            new Attack("Décharge", "Attaque standard.", 3, 1, AttackEffect.NONE, 0),
+            new Attack("Court-circuit", "5 dégâts, mais s'inflige 2 dégâts.", 5, 3, AttackEffect.SELF_DMG, 2)));
+
+        cards.add(new Card("Assureur",
+            "Si il meurt, le cristal ne prend pas les dégâts.",
+            Card.Type.RARE, Card.Family.PRODIGE, 16, 4,
+            new Attack("Contrat", "Attaque standard.", 2, 2, AttackEffect.NONE, 0),
+            new Attack("Clause protectrice", "Active un bouclier : si meurt, le cristal ne prend pas les dégâts.", 0, 3, AttackEffect.PROTECT_CRYSTAL, 0)));
+
+        cards.add(new Card("Ganon",
+            "Calamité ambulante.",
+            Card.Type.LEGENDAIRE, Card.Family.PRODIGE, 25, 5,
+            new Attack("Bras de fer", "Attaque standard.", 4, 2, AttackEffect.NONE, 0),
+            new Attack("Calamité", "Inflige 3 dégâts directs au cristal ennemi, et s'inflige 3 PV.", 3, 5, AttackEffect.DEAL_CRYSTAL_DMG, 3)));
+
+        // === GOOFYS ===
+        cards.add(new Card("Steve",
+            "Il pose des TNT partout.",
+            Card.Type.COMMUN, Card.Family.GOOFY, 10, 2,
+            new Attack("Pioche", "Attaque standard.", 2, 1, AttackEffect.NONE, 0),
+            new Attack("TNT", "Piège : explose si l'adversaire change de carte (dégâts = ATK spé).", 4, 3, AttackEffect.TRAP, 0)));
+
+        cards.add(new Card("Panzoli",
+            "Crée le chaos, prospère dedans.",
+            Card.Type.RARE, Card.Family.GOOFY, 13, 3,
+            new Attack("Bousculade", "Attaque standard.", 3, 2, AttackEffect.NONE, 0),
+            new Attack("Chaos Immersif", "Force l'adversaire à changer de carte active.", 2, 4, AttackEffect.FORCE_SWAP, 0)));
+
+        cards.add(new Card("Leclerc",
+            "Pas de stratégie, juste foncer.",
+            Card.Type.COMMUN, Card.Family.GOOFY, 11, 2,
+            new Attack("Charge", "Attaque standard.", 3, 1, AttackEffect.NONE, 0),
+            new Attack("Pas de stratégie", "Attaque deux fois de suite (attaque normale x2).", 3, 3, AttackEffect.EXTRA_ATTACK, 0)));
+
+        return cards;
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/model/card/Card.java ===
+package fr.github.tcgame.model.card;
+
+import fr.github.tcgame.model.attack.Attack;
+
+public class Card {
+    public enum Type{COMMUN,RARE,LEGENDAIRE,TASTY_CROUSTY,OBJET,EVENT}
+    public enum Family { CAPITALISTE, MAUDIT, PRODIGE, GOOFY, SORT, EVENT }
+    private String name;
+    private String description;
+    private Type type;
+    private Family family;
+    private int hp;
+    private int currentHp;
+    private int cost;
+
+    //Effets carte
+    private boolean frozen;
+    private boolean hasAttackMiss;
+    private int missChance;
+    private boolean protectCrystal;
+    private boolean hasTrap;
+    private int poisonDamage;
+
+    private Attack normalAtk;
+    private Attack specialAtk;
+
+    private String bgCardTexturePath;
+    private String charTexturePath;
+
+    public Card(String name, String description, Type type, Family family,
+                int hp, int cost, Attack normalAtk, Attack specialAtk) {
+        this.name = name;
+        this.description = description;
+        this.type = type;
+        this.family = family;
+        this.hp = hp;
+        this.currentHp = hp;
+        this.cost = cost;
+        this.normalAtk = normalAtk;
+        this.specialAtk = specialAtk;
+    }
+
+    public void takeDamage(int amount) {
+        currentHp = Math.max(0, currentHp - amount);
+    }
+
+    public void heal(int amount) {
+        currentHp = Math.min(hp, currentHp + amount);
+    }
+
+    public boolean isDead() {
+        return currentHp <= 0;
+    }
+
+    public boolean isBelowHalfHp() {
+        return currentHp < hp / 2.0;
+    }
+
+    //Getters
+    public String getName()             { return name; }
+    public String getDescription()      { return description; }
+    public Type getType()               { return type; }
+    public Family getFamily()           { return family; }
+    public int getHp()                  { return hp; }
+    public int getCurrentHp()          { return currentHp; }
+    public int getCost()                { return cost; }
+    public Attack getNormalAtk()        { return normalAtk; }
+    public Attack getSpecialAtk()       { return specialAtk; }
+    public String getBgCardTexturePath(){ return bgCardTexturePath; }
+    public String getCharTexturePath()  { return charTexturePath; }
+
+
+
+    //Methodes effets
+
+    public void applyFreeze()             { this.frozen = true; }
+    public void clearFreeze()             { this.frozen = false; }
+    public boolean isFrozen()             { return frozen; }
+
+    public void applyMissChance(int pct)  { this.hasAttackMiss = true; this.missChance = pct; }
+    public void clearMissChance()         { this.hasAttackMiss = false; this.missChance = 0; }
+    public boolean hasAttackMiss()        { return hasAttackMiss; }
+    public int getMissChance()            { return missChance; }
+
+    public void applyProtectCrystal()     { this.protectCrystal = true; }
+    public void clearProtectCrystal()     { this.protectCrystal = false; }
+    public boolean isProtectingCrystal()  { return protectCrystal; }
+
+    public void setTrap(boolean trap)     { this.hasTrap = trap; }
+    public boolean hasTrap()              { return hasTrap; }
+
+    public void applyPoison(int dmgPerTurn) { this.poisonDamage = dmgPerTurn; }
+    public void clearPoison()               { this.poisonDamage = 0; }
+    public int getPoisonDamage()            { return poisonDamage; }
+
+    public void clearAllStatuses() {
+        clearFreeze();
+        clearMissChance();
+        clearProtectCrystal();
+        setTrap(false);
+        clearPoison();
+    }
+
+
+    //Setters textures
+
+    public void setBgCardTexturePath(String path) { this.bgCardTexturePath = path; }
+    public void setCharTexturePath(String path)   { this.charTexturePath = path; }
+
+    @Override
+    public String toString() {
+        return String.format("[%s/%s] %s  HP:%d/%d  Coût:%d",
+            type, family, name, currentHp, hp, cost);
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/model/GameModel.java ===
+package fr.github.tcgame.model;
+
+import fr.github.tcgame.model.attack.Attack;
+import fr.github.tcgame.model.attack.AttackEffect;
+import fr.github.tcgame.model.card.Card;
+import fr.github.tcgame.model.card.CardFactory;
+import fr.github.tcgame.model.deck.Deck;
+import fr.github.tcgame.model.player.Player;
+
+import java.util.Collections;
+import java.util.List;
+import java.util.Random;
+
+public class GameModel {
+
+    public static final int MANA_GAIN_BASE         = 1;
+    public static final int MANA_GAIN_INCREMENT    = 1;
+    public static final int TURNS_BEFORE_INCREMENT = 5;
+    public static final int INITIAL_HAND_SIZE      = 4;
+
+    public enum Status { EN_COURS, TERMINE }
+
+    private final Player player1;
+    private final Player player2;
+    private final Deck deck;
+    private final Random random;
+
+    private int turnNumber;
+    private Status status;
+    private Player winner;
+
+    public GameModel(String nameP1, String nameP2) {
+        this.player1 = new Player(nameP1);
+        this.player2 = new Player(nameP2);
+        this.deck = new Deck();
+        this.random = new Random();
+        this.turnNumber = 0;
+        this.status = Status.EN_COURS;
+        this.winner = null;
+    }
+
+    // --- Init ---
+
+    public void init() {
+        List<Card> allCards = CardFactory.createAllCards();
+        Collections.shuffle(allCards);
+        for (Card c : allCards) deck.addCard(c);
+
+        for (int i = 0; i < INITIAL_HAND_SIZE; i++) {
+            Card c1 = deck.draw();
+            Card c2 = deck.draw();
+            if (c1 != null) player1.addtoHand(c1);
+            if (c2 != null) player2.addtoHand(c2);
+        }
+        System.out.println("[INIT] Partie initialisée. Main Joueur: " + player1.getHand().size() + " cartes, Main IA: " + player2.getHand().size() + " cartes");
+    }
+
+    // --- Tour ---
+
+    public void startTurn() {
+        turnNumber++;
+        int manaGain = getCurrentManaGain();
+        System.out.println("\n=== DEBUT TOUR " + turnNumber + " (gain mana: " + manaGain + ") ===");
+
+        player1.gainMana(manaGain);
+        player2.gainMana(manaGain);
+
+        drawForPlayer(player1);
+        drawForPlayer(player2);
+
+        applyPoisonDamage(player1, player2);
+        applyPoisonDamage(player2, player1);
+    }
+
+    private void drawForPlayer(Player player) {
+        if (player.cannotDraw()) {
+            System.out.println("[PIOCHE] " + player.getName() + " ne peut pas piocher ce tour.");
+            player.setCannotDraw(false);
+            return;
+        }
+        Card drawn = deck.draw();
+        if (drawn != null) {
+            player.addtoHand(drawn);
+            System.out.println("[PIOCHE] " + player.getName() + " pioche " + drawn.getName());
+        } else {
+            System.out.println("[PIOCHE] Pioche vide !");
+        }
+    }
+
+    private void applyPoisonDamage(Player poisoned, Player opponent) {
+        Card active = poisoned.getActiveCard();
+        if (active == null || active.getPoisonDamage() <= 0) return;
+        Card opActive = opponent.getActiveCard();
+        if (opActive != null) {
+            System.out.println("[POISON] " + active.getName() + " empoisonne " + opActive.getName() + " (" + active.getPoisonDamage() + " dégâts)");
+            opActive.takeDamage(active.getPoisonDamage());
+            checkCardDeath(opActive, opponent, poisoned);
+        }
+    }
+
+    public int getCurrentManaGain() {
+        int increments = (turnNumber - 1) / TURNS_BEFORE_INCREMENT;
+        return MANA_GAIN_BASE + increments * MANA_GAIN_INCREMENT;
+    }
+
+    // --- Déploiement ---
+
+    public boolean deployToBench(Player player, Card card) {
+        return player.deployToBench(card);
+    }
+
+    public boolean playFromBenchFree(Player player, Card card) {
+        return player.playFromBenchFree(card);
+    }
+
+    public boolean swapActiveCard(Player player, Card card) {
+        // Vérifie le piège TNT de l'adversaire avant d'échanger
+        Player opponent = getOpponent(player);
+        Card opActive = opponent.getActiveCard();
+        if (opActive != null && opActive.hasTrap()) {
+            System.out.println("[PIEGE] TNT déclenché ! " + opActive.getName() + " inflige " + opActive.getSpecialAtk().getDamage() + " dégâts au cristal de " + player.getName());
+            opActive.setTrap(false);
+            player.getCrystal().takeDamage(opActive.getSpecialAtk().getDamage());
+            checkEndCondition();
+        }
+        return player.swapActiveCard(card);
+    }
+
+    // --- Combat ---
+
+    public void resolveAttack(Player attacker, boolean useSpecial) {
+        if (status == Status.TERMINE) return;
+
+        Player defender = getOpponent(attacker);
+        Card atkCard = attacker.getActiveCard();
+        Card defCard = defender.getActiveCard();
+
+        if (atkCard == null) {
+            System.out.println("[ATTAQUE] " + attacker.getName() + " n'a pas de carte active !");
+            return;
+        }
+
+        // Carte gelée
+        if (atkCard.isFrozen()) {
+            System.out.println("[ATTAQUE] " + atkCard.getName() + " est gelé, ne peut pas attaquer !");
+            atkCard.clearFreeze();
+            return;
+        }
+
+        Attack attack = useSpecial ? atkCard.getSpecialAtk() : atkCard.getNormalAtk();
+        if (attack == null) {
+            System.out.println("[ATTAQUE] Pas d'attaque disponible !");
+            return;
+        }
+
+        // Vérification mana
+        if (!attacker.spendMana(attack.getCostMana())) {
+            System.out.println("[ATTAQUE] " + attacker.getName() + " n'a pas assez de mana pour " + attack.getName() + " (besoin " + attack.getCostMana() + ")");
+            return;
+        }
+
+        // FINAL_SENTENCE : uniquement si cible < 50% PV
+        if (attack.getEffect() == AttackEffect.FINAL_SENTENCE && defCard != null && !defCard.isBelowHalfHp()) {
+            System.out.println("[ATTAQUE] Sentence Finale : l'ennemi n'est pas assez affaibli !");
+            attacker.spendMana(-attack.getCostMana()); // remboursement
+            return;
+        }
+
+        // Miss chance
+        if (atkCard.hasAttackMiss() && random.nextInt(100) < atkCard.getMissChance()) {
+            System.out.println("[ATTAQUE] " + atkCard.getName() + " rate son attaque !");
+            atkCard.clearMissChance();
+            return;
+        }
+        if (atkCard.hasAttackMiss()) atkCard.clearMissChance();
+
+        // --- Résolution des dégâts ---
+        if (defCard != null) {
+            // Il y a une carte ennemie active
+            System.out.println("[ATTAQUE] " + attacker.getName() + " : " + atkCard.getName()
+                + " utilise " + attack.getName() + " contre " + defCard.getName()
+                + " (" + attack.getDamage() + " dégâts)");
+            defCard.takeDamage(attack.getDamage());
+            System.out.println("[ETAT] " + defCard.getName() + " -> " + defCard.getCurrentHp() + "/" + defCard.getHp() + " PV");
+        } else {
+            // Aucune carte ennemie : dégâts directs au cristal
+            System.out.println("[ATTAQUE] " + attacker.getName() + " : " + atkCard.getName()
+                + " attaque directement le cristal de " + defender.getName()
+                + " (" + attack.getDamage() + " dégâts)");
+            defender.getCrystal().takeDamage(attack.getDamage());
+            System.out.println("[CRISTAL] " + defender.getName() + " -> " + defender.getCrystal().getCurrentHp() + "/" + defender.getCrystal().getMaxHp() + " PV");
+        }
+
+        // Effets spéciaux
+        if (attack.hasEffect() && defCard != null) {
+            applyEffect(attack, attacker, defender, atkCard, defCard);
+        }
+
+        if (defCard != null) checkCardDeath(defCard, defender, attacker);
+        checkEndCondition();
+
+        // EXTRA_ATTACK : rejouer une attaque normale automatiquement
+        if (attack.getEffect() == AttackEffect.EXTRA_ATTACK) {
+            System.out.println("[EXTRA] " + atkCard.getName() + " attaque une deuxième fois !");
+            resolveAttack(attacker, false);
+        }
+    }
+
+    private void applyEffect(Attack attack, Player attacker, Player defender,
+                             Card atkCard, Card defCard) {
+        int val = attack.getEffectValue();
+        System.out.println("[EFFET] Application de " + attack.getEffect() + " (valeur: " + val + ")");
+        switch (attack.getEffect()) {
+            case DEAL_CRYSTAL_DMG:
+                defender.getCrystal().takeDamage(val);
+                atkCard.takeDamage(val);
+                System.out.println("[EFFET] Dégâts directs au cristal de " + defender.getName() + " (-" + val + " PV). " + atkCard.getName() + " s'inflige aussi " + val + " PV.");
+                break;
+            case SELF_DMG:
+                atkCard.takeDamage(val);
+                System.out.println("[EFFET] " + atkCard.getName() + " s'inflige " + val + " PV.");
+                break;
+            case STEAL_COINS:
+                // Reconverti en vol de mana
+                if (defender.spendMana(val)) {
+                    attacker.gainMana(val);
+                    System.out.println("[EFFET] " + atkCard.getName() + " vole " + val + " mana à " + defender.getName());
+                }
+                break;
+            case MISS_CHANCE:
+                defCard.applyMissChance(val);
+                System.out.println("[EFFET] " + defCard.getName() + " a " + val + "% de rater sa prochaine attaque.");
+                break;
+            case FORCE_SWAP:
+                List<Card> bench = defender.getBench();
+                if (!bench.isEmpty()) {
+                    Card randomCard = bench.get(random.nextInt(bench.size()));
+                    defender.swapActiveCard(randomCard);
+                    System.out.println("[EFFET] " + defender.getName() + " est forcé d'échanger pour " + randomCard.getName());
+                } else {
+                    System.out.println("[EFFET] " + defender.getName() + " n'a pas d'autre carte sur le banc.");
+                }
+                break;
+            case TRAP:
+                atkCard.setTrap(true);
+                System.out.println("[EFFET] " + atkCard.getName() + " pose un piège TNT !");
+                break;
+            case POISON:
+                atkCard.applyPoison(val);
+                System.out.println("[EFFET] " + atkCard.getName() + " empoisonne " + defCard.getName() + " (" + val + " dégâts/tour).");
+                break;
+            case PROTECT_CRYSTAL:
+                atkCard.applyProtectCrystal();
+                System.out.println("[EFFET] " + atkCard.getName() + " active son bouclier de cristal !");
+                break;
+            case REDUCE_DEPLOY_COST:
+                attacker.applyReduceDeployCost(val);
+                System.out.println("[EFFET] Prochain déploiement de " + attacker.getName() + " coûte " + val + " mana de moins.");
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void checkCardDeath(Card card, Player owner, Player killer) {
+        if (!card.isDead()) return;
+
+        System.out.println("[MORT] " + card.getName() + " de " + owner.getName() + " est éliminée !");
+
+        if (!card.isProtectingCrystal()) {
+            System.out.println("[CRISTAL] Les dégâts de la mort de " + card.getName() + " n'atteignent pas le cristal (c'est normal, les dégâts viennent des attaques).");
+        }
+        card.clearProtectCrystal();
+        card.clearAllStatuses();
+        deck.putBack(card);
+        owner.setActiveCard(null);
+        System.out.println("[PIOCHE] " + card.getName() + " retourne dans la pioche.");
+    }
+
+    // --- Fin de partie ---
+
+    public void checkEndCondition() {
+        if (player1.getCrystal().isDestroyed()) {
+            status = Status.TERMINE;
+            winner = player2;
+            System.out.println("[FIN] Le cristal de " + player1.getName() + " est détruit ! " + player2.getName() + " gagne !");
+        } else if (player2.getCrystal().isDestroyed()) {
+            status = Status.TERMINE;
+            winner = player1;
+            System.out.println("[FIN] Le cristal de " + player2.getName() + " est détruit ! " + player1.getName() + " gagne !");
+        }
+    }
+
+    public boolean isOver() { return status == Status.TERMINE; }
+
+    // --- Utilitaires ---
+
+    public Player getOpponent(Player player) {
+        return player == player1 ? player2 : player1;
+    }
+
+    public Player getPlayer1() { return player1; }
+    public Player getPlayer2() { return player2; }
+    public Deck getDeck()      { return deck; }
+    public int getTurnNumber() { return turnNumber; }
+    public Status getStatus()  { return status; }
+    public Player getWinner()  { return winner; }
+
+    @Override
+    public String toString() {
+        return String.format("=== Tour %d | %s ===\n  %s\n  %s\n  %s",
+            turnNumber, status, deck, player1, player2);
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/model/player/Player.java ===
+package fr.github.tcgame.model.player;
+
+import fr.github.tcgame.model.card.Card;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class Player {
+
+    public static final int MAX_BENCH_SIZE = 3;
+    public static final int MAX_MANA       = 10;
+
+    private final String name;
+    private final Crystal crystal;
+
+    private final List<Card> hand;
+    private final List<Card> bench;
+    private Card activeCard;
+
+    private int mana;
+
+    // Effets temporaires
+    private boolean cannotDraw;
+    private int reducedDeployCost; // gardé pour l'effet REDUCE_DEPLOY_COST mais basé sur mana
+
+    public Player(String name) {
+        this.name = name;
+        this.crystal = new Crystal();
+        this.hand = new ArrayList<>();
+        this.bench = new ArrayList<>();
+        this.activeCard = null;
+        this.mana = 0;
+        this.cannotDraw = false;
+        this.reducedDeployCost = 0;
+    }
+
+    // --- Main ---
+
+    public void addtoHand(Card card) { hand.add(card); }
+
+    public boolean removeFromHand(Card card) { return hand.remove(card); }
+
+    // --- Déploiement sur le banc (coûte du mana) ---
+
+    public boolean deployToBench(Card card) {
+        if (bench.size() >= MAX_BENCH_SIZE) {
+            System.out.println("[DEPLOY] Banc plein pour " + name);
+            return false;
+        }
+        int cost = Math.max(0, card.getCost() - reducedDeployCost);
+        if (mana < cost) {
+            System.out.println("[DEPLOY] Pas assez de mana pour " + name + " (besoin " + cost + ", a " + mana + ")");
+            return false;
+        }
+        mana -= cost;
+        reducedDeployCost = 0;
+        hand.remove(card);
+        bench.add(card);
+        System.out.println("[DEPLOY] " + name + " déploie " + card.getName() + " sur le banc (mana restant: " + mana + ")");
+        return true;
+    }
+
+    public boolean removeFromBench(Card card) { return bench.remove(card); }
+
+    // --- Carte active ---
+
+    // Banc -> En jeu (gratuit si aucune carte active)
+    public boolean playFromBenchFree(Card card) {
+        if (!bench.contains(card)) return false;
+        bench.remove(card);
+        activeCard = card;
+        System.out.println("[PLAY] " + name + " met " + card.getName() + " en jeu (gratuit)");
+        return true;
+    }
+
+    // Échange la carte active avec une du banc (coûte 2 mana)
+    public boolean swapActiveCard(Card card) {
+        if (!bench.contains(card)) return false;
+        if (mana < 2) {
+            System.out.println("[SWAP] Pas assez de mana pour échanger (" + name + ")");
+            return false;
+        }
+        mana -= 2;
+        if (activeCard != null) bench.add(activeCard);
+        bench.remove(card);
+        activeCard = card;
+        System.out.println("[SWAP] " + name + " échange pour " + card.getName() + " (mana restant: " + mana + ")");
+        return true;
+    }
+
+    public void setActiveCard(Card card) { this.activeCard = card; }
+
+    // --- Mana ---
+
+    public void gainMana(int amount) {
+        mana = Math.min(MAX_MANA, mana + amount);
+        System.out.println("[MANA] " + name + " gagne " + amount + " mana -> " + mana + "/" + MAX_MANA);
+    }
+
+    public boolean spendMana(int amount) {
+        if (mana < amount) return false;
+        mana -= amount;
+        return true;
+    }
+
+    public void halveMana() { mana = mana / 2; }
+
+    // --- Effets temporaires ---
+
+    public void setCannotDraw(boolean value)         { this.cannotDraw = value; }
+    public boolean cannotDraw()                      { return cannotDraw; }
+    public void applyReduceDeployCost(int reduction) { this.reducedDeployCost = reduction; }
+
+    // Shuffle
+    public void clearAll() {
+        hand.clear();
+        bench.clear();
+        activeCard = null;
+    }
+
+    // --- Getters ---
+
+    public String getName()        { return name; }
+    public Crystal getCrystal()    { return crystal; }
+    public List<Card> getHand()    { return hand; }
+    public List<Card> getBench()   { return bench; }
+    public Card getActiveCard()    { return activeCard; }
+    public boolean hasActiveCard() { return activeCard != null; }
+    public int getMana()           { return mana; }
+
+    @Override
+    public String toString() {
+        return String.format("%s | %s | Mana:%d/%d | Banc:%d | Main:%d cartes",
+            name, crystal, mana, MAX_MANA, bench.size(), hand.size());
+    }
+}
+=== ./core/src/main/java/fr/github/tcgame/model/player/Crystal.java ===
+package fr.github.tcgame.model.player;
+
+public class Crystal {
+
+    public static final int MAX_HP = 100;
+
+    private int currentHp;
+
+    public Crystal(){
+        this.currentHp = MAX_HP;
+    }
+
+    public void takeDamage(int amount){
+        currentHp = Math.max(0,currentHp-amount);
+    }
+
+    public void heal(int amount){
+        currentHp=Math.min(MAX_HP,currentHp+amount);
+    }
+
+    public boolean isDestroyed(){
+        return currentHp<=0;
+    }
+
+    public int getCurrentHp(){return currentHp;}
+    public int getMaxHp(){return MAX_HP;}
+
+    @Override
+    public String toString(){
+        return String.format("Cristal [%d/%d PV]", currentHp, MAX_HP);
+    }
+
+}
+=== ./core/src/main/java/fr/github/tcgame/model/attack/AttackEffect.java ===
+package fr.github.tcgame.model.attack;
+
+public enum AttackEffect {
+    NONE,
+    DEAL_CRYSTAL_DMG,   // Inflige des degats directs au cristal (Ganon - Calamite)
+    SELF_DMG,           // La carte s'inflige des degats (Electricien - Court-circuit)
+    STEAL_COINS,        // Vole des pieces a l'adversaire (Huissier - Sommation)
+    BONUS_COINS,        // Rapporte des pieces en plus si kill (Stonks - To the Moon)
+    MISS_CHANCE,        // Prochaine attaque ennemie a X% de rater (Corbeau - Augure)
+    EXTRA_ATTACK,       // Peut refaire une attaque normale (Leclerc - Pas de strategie)
+    FORCE_SWAP,         // Force l'adversaire a echanger sa carte (Panzoli - Chaos Immersif)
+    TRAP,               // Piege : explose si l'adversaire change de carte (Steve - TNT)
+    POISON,             // Inflige X degats par tour tant que la carte est en jeu (Modo)
+    PROTECT_CRYSTAL,    // Si la carte meurt, le cristal ne perd pas de PV (Assureur)
+    FINAL_SENTENCE,     // Utilisable seulement si la cible a moins de 50% PV (Bourreau)
+    NO_DRAW,            // L'adversaire ne peut pas piocher au prochain tour (Panzoli passif)
+    REDUCE_DEPLOY_COST  // Reduit le cout du prochain deploiement de 1 (Actionnaire)
+}
+=== ./core/src/main/java/fr/github/tcgame/model/attack/Attack.java ===
+package fr.github.tcgame.model.attack;
+
+public class Attack {
+    private String name;
+    private String description;
+    private int damage;
+    private int costMana;
+    private AttackEffect effect;
+    private int effectValue;
+
+    public Attack(String name, String description, int damage, int costMana, AttackEffect effect, int effectValue){
+        this.name=name;
+        this.description=description;
+        this.damage=damage;
+        this.costMana=costMana;
+        this.effect=effect;
+        this.effectValue=effectValue;
+    }
+
+    public boolean hasEffect(){
+        return effect != AttackEffect.NONE;
+    }
+
+    //Getters
+    public String getName()          { return name; }
+    public String getDescription()   { return description; }
+    public int getDamage()           { return damage; }
+    public int getCostMana()         { return costMana; }
+    public AttackEffect getEffect()  { return effect; }
+    public int getEffectValue()      { return effectValue; }
+
+
+    @Override
+    public String toString() {
+        return String.format("%s (dmg:%d, mana:%d%s)",
+            name, damage, costMana,
+            hasEffect() ? ", effet:" + effect + "(" + effectValue + ")" : "");
+    }
+}
+=== ./core/build.gradle ===
+[compileJava, compileTestJava]*.options*.encoding = 'UTF-8'
+eclipse.project.name = appName + '-core'
+
+dependencies {
+  api "com.badlogicgames.box2dlights:box2dlights:$box2dlightsVersion"
+  api "com.badlogicgames.gdx:gdx-ai:$aiVersion"
+  api "com.badlogicgames.gdx:gdx-box2d:$gdxVersion"
+  api "com.badlogicgames.gdx:gdx-freetype:$gdxVersion"
+  api "com.badlogicgames.gdx:gdx:$gdxVersion"
+  api "org.apache.groovy:groovy-all:$groovyVersion"
+
+  if(enableGraalNative == 'true') {
+    implementation "io.github.berstanio:gdx-svmhelper-annotations:$graalHelperVersion"
+  }
+}
+
+jar {
+  duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+=== ./gradle.properties ===
+# This doesn't need to be false, and some projects may be able to take advantage of setting daemon to true.
+# We set it to false by default in order to avoid too many daemons from being created and persisting; each needs RAM.
+org.gradle.daemon=false
+# Sets starting memory usage to 512MB, maximum memory usage to 1GB, and tries to set as much to use Unicode as we can.
+org.gradle.jvmargs=-Xms512M -Xmx1G -Dfile.encoding=UTF-8 -Dconsole.encoding=UTF-8
+# "Configure on-demand" must be false because it breaks projects that have Android modules. The default is also false.
+org.gradle.configureondemand=false
+# The logging level determines which messages get shown about how Gradle itself is working, such as if build.gradle
+# files are fully future-proof (which they never are, because Gradle constantly deprecates working APIs).
+# You can change 'quiet' below to 'lifecycle' to use Gradle's default behavior, which shows some confusing messages.
+# You could instead change 'quiet' below to 'info' to see info that's important mainly while debugging build files.
+# Note that if you want to use Gradle Build Scans, you should set the below logging level to 'lifecycle', otherwise
+# the link to the scan won't get shown at all.
+# Documented at: https://docs.gradle.org/current/userguide/command_line_interface.html#sec:command_line_logging
+org.gradle.logging.level=quiet
+groovyVersion=5.0.4
+aiVersion=1.8.2
+box2dlightsVersion=1.5
+lwjgl3Version=3.4.1
+graalHelperVersion=2.0.1
+enableGraalNative=false
+gdxVersion=1.14.0
+projectVersion=1.0.0
+=== ./assets/ui/uiskin.json ===
+{
+com.badlogic.gdx.graphics.g2d.BitmapFont: {
+  default: {
+    file: font.fnt
+  }
+  font: {
+    file: font.fnt
+  }
+  list: {
+    file: font-list.fnt
+  }
+  subtitle: {
+    file: font-subtitle.fnt
+  }
+  window: {
+    file: font-window.fnt
+  }
+}
+com.badlogic.gdx.graphics.Color: {
+  black: {
+    r: 0
+    g: 0
+    b: 0
+    a: 1
+  }
+  disabled: {
+    r: 0.23137255
+    g: 0.24705882
+    b: 0.25882354
+    a: 1
+  }
+  highlight: {
+    r: 0.19215687
+    g: 0.6627451
+    b: 0.95686275
+    a: 1
+  }
+  message: {
+    r: 0.44313726
+    g: 0.47843137
+    b: 0.5372549
+    a: 1
+  }
+  split: {
+    r: 0.44313726
+    g: 0.47843137
+    b: 0.5372549
+    a: 1
+  }
+  white: {
+    r: 1
+    g: 1
+    b: 1
+    a: 1
+  }
+}
+com.badlogic.gdx.scenes.scene2d.ui.Skin$TintedDrawable: {
+  split: {
+    name: white
+    color: split
+  }
+  black: {
+    name: white
+    color: black
+  }
+  highlight: {
+    name: white
+    color: highlight
+  }
+}
+com.badlogic.gdx.scenes.scene2d.utils.TiledDrawable: {
+  progress-bar-knob-t: {
+    region: progress-bar-knob
+    minWidth: 0
+    minHeight: 5
+  }
+}
+com.badlogic.gdx.scenes.scene2d.ui.Button$ButtonStyle: {
+  default: {
+    up: button-normal
+    down: button-normal-pressed
+    over: button-normal-over
+    focused: button-normal-over
+  }
+  spinner-up: {
+    up: spinner-up
+    down: spinner-up-pressed
+    over: spinner-up-over
+  }
+  spinner-down: {
+    up: spinner-down
+    down: spinner-down-pressed
+    over: spinner-down-over
+  }
+}
+com.badlogic.gdx.scenes.scene2d.ui.CheckBox$CheckBoxStyle: {
+  default: {
+    checkboxOn: checkbox-selected
+    checkboxOff: checkbox
+    checkboxOnOver: checkbox-selected-over
+    checkboxOver: checkbox-over
+    font: font
+  }
+  radio: {
+    checkboxOn: radio-selected
+    checkboxOff: radio
+    checkboxOnOver: radio-selected-over
+    checkboxOver: radio-over
+    font: font
+  }
+}
+com.badlogic.gdx.scenes.scene2d.ui.ImageButton$ImageButtonStyle: {
+  default: {
+    up: button-normal
+    down: button-normal-pressed
+    over: button-normal-over
+    focused: button-normal-over
+  }
+}
+com.badlogic.gdx.scenes.scene2d.ui.ImageTextButton$ImageTextButtonStyle: {
+  default: {
+    font: font
+    up: button-normal
+    down: button-normal-pressed
+    over: button-normal-over
+    focused: button-normal-pressed
+  }
+}
+com.badlogic.gdx.scenes.scene2d.ui.Label$LabelStyle: {
+  default: {
+    font: font
+  }
+  window: {
+    font: window
+  }
+  list: {
+    font: list
+  }
+  subtitle: {
+    font: subtitle
+  }
+}
+com.badlogic.gdx.scenes.scene2d.ui.List$ListStyle: {
+  default: {
+    font: list
+    fontColorSelected: white
+    fontColorUnselected: white
+        selection: selection
+        background: list
+    }
+    list-nobg: {
+        font: list
+        fontColorSelected: white
+        fontColorUnselected: white
+        selection: selection
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.ProgressBar$ProgressBarStyle: {
+    default-horizontal: {
+        background: progress-bar-square
+        knobBefore: progress-bar-square-knob
+    }
+    default-vertical: {
+        background: progress-bar-square
+        knobBefore: progress-bar-square-knob
+    }
+    curved: {
+        background: progress-bar
+        knobBefore: progress-bar-knob-t
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.ScrollPane$ScrollPaneStyle: {
+    default: {
+        hScrollKnob: scrollbar
+        vScrollKnob: scrollbar
+    }
+    list: {
+        background: list
+        hScrollKnob: scrollbar
+        vScrollKnob: scrollbar
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.SelectBox$SelectBoxStyle: {
+    default: {
+        font: font
+        fontColor: white
+        background: select-box
+        scrollStyle: list
+        listStyle: list-nobg
+        backgroundOpen: select-box-open
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.Slider$SliderStyle: {
+    default-horizontal: {
+        knobOver: slider-knob-over
+        knobDown: slider-knob-over
+        background: progress-bar-square
+        knob: slider-knob
+    }
+    default-vertical: {
+        knobOver: slider-knob-over
+        knobDown: slider-knob-over
+        background: progress-bar-square
+        knob: slider-knob
+    }
+    curved: {
+        knobOver: slider-knob-over
+        knobDown: slider-knob-over
+        background: slider
+        knob: slider-knob
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.SplitPane$SplitPaneStyle: {
+    default-horizontal: {
+        handle: split
+    }
+    default-vertical: {
+        handle: split
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.TextButton$TextButtonStyle: {
+    default: {
+        font: font
+        up: button-normal
+        down: button-normal-pressed
+        over: button-normal-over
+        focused: button-normal-over
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.TextField$TextFieldStyle: {
+    default: {
+        font: font
+        fontColor: white
+        disabledFontColor: disabled
+        background: textfield
+        focusedBackground: textfield-selected
+        cursor: white
+        selection: highlight
+        messageFont: font
+        messageFontColor: message
+    }
+    spinner: {
+        font: font
+        fontColor: white
+        disabledFontColor: disabled
+        background: spinner-textfield
+        focusedBackground: spinner-textfield-selected
+        cursor: white
+        selection: highlight
+        messageFont: font
+        messageFontColor: message
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.TextTooltip$TextTooltipStyle: {
+    default: {
+        label: default
+        background: list
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.Touchpad$TouchpadStyle: {
+    default: {
+        background: list
+        knob: slider-knob
+    }
+}
+com.badlogic.gdx.scenes.scene2d.ui.Window$WindowStyle: {
+    default: {
+        background: window
+        titleFont: window
+    }
+},
+
+    com.badlogic.gdx.graphics.Color: {
+        white: { r: 1, g: 1, b: 1, a: 1 },
+        gray: { r: 0.5, g: 0.5, b: 0.5, a: 1 },
+        black: { r: 0, g: 0, b: 0, a: 1 },
+
+        up: { r: 0.1, g: 0.1, b: 0.1, a: 1 },
+        over: { r: 0.3, g: 0.3, b: 0.3, a: 1 },
+        down: { r: 0.3, g: 0, b: 0, a: 1 },
+        checked: { r: 0.3, g: 0, b: 0, a: 1 },
+        checkedOver: { r: 0.4, g: 0, b: 0, a: 1 },
+        disabled: { r: 0.4, g: 0.4, b: 0.4, a: 1 },
+        background: { r: 0.2, g: 0.2, b: 0.2, a: 1 },
+        selection: { r: 0.3, g: 0, b: 0, a: 1 },
+        semiTransparent: { r: 0, g: 0, b: 0, a: 0.6 },
+
+        font: white
+        fontOver: white
+        fontDown: gray
+        fontChecked: white
+        fontCheckedOver: white
+        fontDisabled: gray
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.Skin$TintedDrawable: {
+        buttonUp: { name: rect, color: up },
+        buttonOver: { name: rect, color: over },
+        buttonDown: { name: rect, color: down },
+        buttonDisabled: { name: rect, color: disabled },
+        buttonChecked: { name: rect, color: checked },
+        buttonCheckedOver: { name: rect, color: checkedOver },
+        checkBoxOn: { name: check-on, color: up },
+        checkBoxOff: { name: check, color: up },
+        checkBoxOver: { name: check, color: over },
+        checkBoxOnDisabled: { name: check-on, color: disabled },
+        checkBoxOffDisabled: { name: check, color: disabled },
+        icon: { name: check-on, color: font },
+        selection: { name: dot, color: selection },
+        list: { name: rect, color: background },
+        progressHorizontal: { name: line-v, color: up },
+        progressHorizontalKnob: { name: line-v, color: down },
+        progressHorizontalDisabled: { name: line-v, color: disabled },
+        progressHorizontalKnobDisabled: { name: line-v, color: disabled },
+        progressVertical: { name: line-h, color: up },
+        progressVerticalKnob: { name: line-h, color: down },
+        progressVerticalDisabled: { name: line-h, color: disabled },
+        progressVerticalKnobDisabled: { name: line-h, color: disabled },
+        scrollHorizontal: { name: line-v, color: up },
+        scrollVertical: { name: line-h, color: up },
+        scrollKnob: { name: knob-v, color: down },
+        scrollKnobVertical: { name: knob-h, color: down },
+        scrollPane: { name: rect, color: background },
+        selectBox: { name: select, color: up },
+        selectOver: { name: select, color: over },
+        selectDown: { name: select, color: over },
+        selectDisabled: { name: select, color: disabled },
+        selectList: { name: rect, color: over },
+        splitPane: { name: square, color: down },
+        sliderHorizontal: { name: square, color: up },
+        sliderKnob: { name: rect, color: up },
+        sliderKnobOver: { name: rect, color: over },
+        sliderKnobDown: { name: rect, color: down },
+        sliderKnobDisabled: { name: rect, color: disabled },
+        sliderVertical: { name: square, color: up },
+        sliderVerticalKnob: { name: rect, color: up },
+        sliderVerticalKnobOver: { name: rect, color: over },
+        sliderVerticalKnobDown: { name: rect, color: down },
+        sliderVerticalKnobDisabled: { name: rect, color: disabled },
+        textField: { name: rect, color: up },
+        textFieldDown: { name: rect, color: over },
+        textFieldDisabled: { name: rect, color: disabled },
+        textFieldCursor: { name: dot, color: font },
+        tooltip: { name: rect, color: up },
+        touchpad: { name: rect, color: over },
+        touchpadKnob: { name: check-on, color: down },
+        tree: { name: rect, color: background },
+        treeOver: { name: dot, color: over },
+        treeMinus: { name: tree-minus, color: up },
+        treePlus: { name: tree-plus, color: up },
+        window: { name: rect, color: background },
+        windowResize: { name: window-resize, color: background },
+        windowBorder: { name: window-border, color: background },
+        alpha: { name: dot, color: semiTransparent }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.Button$ButtonStyle: {
+        default: { up: buttonUp, over: buttonOver, down: buttonDown, disabled: buttonDisabled },
+        toggle: { up: buttonUp, over: buttonOver, down: buttonDown, checked: buttonChecked, checkedOver: buttonCheckedOver, disabled: buttonDisabled }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.CheckBox$CheckBoxStyle: {
+        default: { checkboxOn: checkBoxOn, checkboxOff: checkBoxOff, checkboxOver: checkBoxOver, checkboxOnDisabled: checkBoxOnDisabled,
+            checkboxOffDisabled: checkBoxOffDisabled, font: default, fontColor: font, overFontColor: fontOver, downFontColor: fontDown,
+            checkedFontColor: fontChecked, checkedOverFontColor: fontCheckedOver, disabledFontColor: fontDisabled, pressedOffsetY: -1, pressedOffsetX: 1 }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.ImageButton$ImageButtonStyle: {
+        default: { up: buttonUp, over: buttonOver, down: buttonDown, disabled: buttonDisabled, imageUp: icon }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.ImageTextButton$ImageTextButtonStyle: {
+        default: { up: buttonUp, over: buttonOver, down: buttonDown, disabled: buttonDisabled, font: default, fontColor: font,
+            overFontColor: fontOver, downFontColor: fontDown, disabledFontColor: fontDisabled, pressedOffsetY: -1, pressedOffsetX: 1, imageUp: icon }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.Label$LabelStyle: {
+        default: { font: default, fontColor: font },
+        white: { font: default, fontColor: white }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.List$ListStyle: {
+        default: { fontColorUnselected: font, selection: selection, fontColorSelected: fontDown, font: default },
+        background: { background: list, fontColorUnselected: font, selection: selection, fontColorSelected: fontDown, font: default }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.ProgressBar$ProgressBarStyle: {
+        default-horizontal: { background: progressHorizontal, knobBefore: progressHorizontalKnob,
+            disabledBackground: progressHorizontalDisabled, disabledKnobBefore: progressHorizontalKnobDisabled },
+        default-vertical: { background: progressVertical, knobBefore: progressVerticalKnob,
+            disabledBackground: progressVerticalDisabled, disabledKnobBefore: progressVerticalKnobDisabled }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.ScrollPane$ScrollPaneStyle: {
+        default: { hScrollKnob: scrollKnob, vScrollKnob: scrollKnobVertical, hScroll: scrollHorizontal, vScroll: scrollVertical },
+        clean: { hScrollKnob: scrollKnob, vScrollKnob: scrollKnobVertical },
+        background: { background: scrollPane, hScrollKnob: scrollKnob, vScrollKnob: scrollKnobVertical, hScroll: scrollHorizontal, vScroll: scrollVertical }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.SelectBox$SelectBoxStyle: {
+        default: { font: default, fontColor: font, disabledFontColor: fontDisabled, background: selectBox, backgroundOver: selectOver,
+            backgroundOpen: selectDown, backgroundDisabled: selectDisabled, scrollStyle: default, listStyle:
+            { background: selectList, fontColorUnselected: font, selection: selection, fontColorSelected: fontDown, font: default }
+        }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.Slider$SliderStyle: {
+        default-horizontal: { background: sliderHorizontal, knob: sliderKnob, knobOver: sliderKnobOver, knobDown: sliderKnobDown,
+            disabledKnob: sliderKnobDisabled },
+        default-vertical: { background: sliderVertical, knob: sliderVerticalKnob, knobOver: sliderVerticalKnobOver,
+            knobDown: sliderVerticalKnobDown,    disabledKnob: sliderVerticalKnobDisabled }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.SplitPane$SplitPaneStyle: {
+        default-vertical: { handle: splitPane },
+        default-horizontal: { handle: splitPane }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.TextButton$TextButtonStyle: {
+        default: { up: buttonUp, over: buttonOver, down: buttonDown, disabled: buttonDisabled, font: default, fontColor: font,
+            overFontColor: fontOver, downFontColor: fontDown, disabledFontColor: fontDisabled, pressedOffsetY: -1, pressedOffsetX: 1 },
+        toggle: { up: buttonUp, over: buttonOver, down: buttonDown, checked: buttonChecked, checkedOver: buttonCheckedOver,
+            disabled: buttonDisabled, font: default, fontColor: font, overFontColor: fontOver, downFontColor: fontDown, disabledFontColor:
+            fontDisabled, checkedFontColor: fontChecked, checkedOverFontColor: fontCheckedOver, pressedOffsetY: -1, pressedOffsetX: 1 },
+        text: { font: default, fontColor: up, overFontColor: over, downFontColor: down, disabledFontColor: disabled,
+            pressedOffsetY: -1, pressedOffsetX: 1 },
+        textToggle: { font: default, fontColor: up, overFontColor: over, downFontColor: down, disabledFontColor:
+        disabled, checkedFontColor: font, checkedOverFontColor: fontOver, pressedOffsetY: -1, pressedOffsetX: 1 }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.TextField$TextFieldStyle: {
+        default: { font: default, messageFont: default, fontColor: font, focusedFontColor: fontOver, disabledFontColor: fontDisabled,
+            messageFontColor: fontDown, background: textField, focusedBackground: textFieldDown, disabledBackground: textFieldDisabled,
+            cursor: textFieldCursor, selection: selection }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.TextTooltip$TextTooltipStyle: {
+        default: { label: default, background: tooltip }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.Touchpad$TouchpadStyle: {
+        default: { background: touchpad, knob: touchpadKnob }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.Tree$TreeStyle: {
+        default: { minus: treeMinus, plus: treePlus, selection: selection, over: treeOver },
+        background: { background: tree, minus: treeMinus, plus: treePlus, selection: selection, over: treeOver }
+    },
+    com.badlogic.gdx.scenes.scene2d.ui.Window$WindowStyle: {
+        default: { titleFont: default, background: window, titleFontColor: fontDisabled },
+        resize: { titleFont: default, background: windowResize, titleFontColor: fontDisabled },
+        border: { titleFont: default, background: windowBorder, titleFontColor: fontDisabled },
+        dialog: { titleFont: default, background: window, titleFontColor: fontDisabled, stageBackground: alpha }
+    }
+}
+=== ./build.gradle ===
+buildscript {
+  repositories {
+    mavenCentral()
+    gradlePluginPortal()
+    mavenLocal()
+    google()
+    maven { url = 'https://central.sonatype.com/repository/maven-snapshots/' }
+  }
+  dependencies {
+
+
+  }
+}
+
+allprojects {
+  apply plugin: 'eclipse'
+  apply plugin: 'idea'
+
+  // This allows you to "Build and run using IntelliJ IDEA", an option in IDEA's Settings.
+  idea {
+    module {
+      outputDir = file('build/classes/java/main')
+      testOutputDir = file('build/classes/java/test')
+    }
+  }
+}
+
+configure(subprojects) {
+  apply plugin: 'java-library'
+  apply plugin: 'groovy'
+  java.sourceCompatibility = 17
+
+  // From https://lyze.dev/2021/04/29/libGDX-Internal-Assets-List/
+  // The article can be helpful when using assets.txt in your project.
+  tasks.register('generateAssetList') {
+    inputs.dir("${project.rootDir}/assets/")
+    // projectFolder/assets
+    File assetsFolder = new File("${project.rootDir}/assets/")
+    // projectFolder/assets/assets.txt
+    File assetsFile = new File(assetsFolder, "assets.txt")
+    // delete that file in case we've already created it
+    assetsFile.delete()
+
+    // iterate through all files inside that folder
+    // convert it to a relative path
+    // and append it to the file assets.txt
+    fileTree(assetsFolder).collect { assetsFolder.relativePath(it) }.sort().each {
+      assetsFile.append(it + "\n")
+    }
+  }
+  processResources.dependsOn 'generateAssetList'
+
+  compileJava {
+    options.incremental = true
+  }
+}
+
+subprojects {
+  version = "$projectVersion"
+  ext.appName = 'TCGame'
+  repositories {
+    mavenCentral()
+    // You may want to remove the following line if you have errors downloading dependencies.
+    mavenLocal()
+    maven { url = 'https://central.sonatype.com/repository/maven-snapshots/' }
+    maven { url = 'https://jitpack.io' }
+  }
+}
+
+eclipse.project.name = 'TCGame' + '-parent'
+=== ./.gradle/9.4.0/gc.properties ===
+=== ./.gradle/vcs-1/gc.properties ===
+=== ./.gradle/buildOutputCleanup/cache.properties ===
+#Thu Apr 30 12:57:29 CEST 2026
+gradle.version=9.4.0
