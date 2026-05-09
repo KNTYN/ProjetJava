@@ -14,14 +14,11 @@ public class MainMenu extends Menu {
     protected void build() {
         setBackground("placeholder/BG_MainMenu.jpg");
 
-        addButton("placeholder/bouton.png", 50, 500, 0.35f, controller::goSelection);
-        addButton("placeholder/bouton.png", 50, 300, 0.35f, controller::playMusic);
-        addButton("placeholder/bouton.png", 50, 100, 0.35f, controller::quit);
-        /*
-        addSearchBar(30,600,300,400, 60, text -> {
-            System.out.println(text);
-        });
-        */
+        addButton("placeholder/bouton.png", 50, 650, 0.2f, controller::goSelection); // jouer
+        addButton("placeholder/bouton.png", 50, 400, 0.2f, controller::goCardList); // bibliotheque
+        addButton("placeholder/bouton.png", 50, 250, 0.2f, controller::goSettings); // parametres
+        addButton("placeholder/bouton.png", 50, 100, 0.2f, controller::quit); // quitter
+
         keyIsPressed(Input.Keys.ESCAPE, controller::quit);
     }
 }

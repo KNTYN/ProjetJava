@@ -11,10 +11,9 @@ public class SelectionMenu extends Menu{
     @Override
     protected void build() {
         setBackground("test/test.jpg");
-        addButton("placeholder/bouton.png", 450, 320, 0.35f, controller::playMusic);
-        addButton("placeholder/bouton.png", 450, 185, 0.35f, controller::goMain);
+        addButton("placeholder/bouton.png", 450, 320, 0.35f, controller::startGame); // solo
+        addButton("placeholder/bouton.png", 450, 185, 0.35f, controller::goMain); // retour
 
         keyIsPressed(Input.Keys.ESCAPE, controller::goMain);
-        keyIsPressed(Input.Keys.UP, controller::playMusic);
     }
 }

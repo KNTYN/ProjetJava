@@ -2,17 +2,22 @@ package fr.github.tcgame.view;
 
 import com.badlogic.gdx.ApplicationAdapter;
 
+import fr.github.tcgame.model.audio.AudioSettings;
 import fr.github.tcgame.view.menu.Menu;
 import fr.github.tcgame.view.menu.MenuManager;
 
 public class MainGame
 
     extends ApplicationAdapter {
-    private MenuManager menuManager;
+    private MenuManager menuManager = new MenuManager();
+    public static AudioSettings AUDIOSETTINGS;
+
     @Override
     public void create() {
-        menuManager = new MenuManager();
-        menuManager.changeMenu(Menu.TypeMenu.MAIN);
+        AUDIOSETTINGS=new AudioSettings();
+        menuManager.initMenu();
+        menuManager.changeMenu(Menu.TypeMenu.SPLASH);
+        AUDIOSETTINGS.initMusic();
     }
 
     @Override

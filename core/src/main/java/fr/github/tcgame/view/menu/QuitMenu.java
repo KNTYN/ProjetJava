@@ -11,8 +11,9 @@ public class QuitMenu extends Menu{
     @Override
     protected void build() {
         setBackground("placeholder/BG_QuitMenu.jpg");
-        addButton("placeholder/bouton.png", 150, 50, 0.35f, () -> {Gdx.app.exit();});
-        addButton("placeholder/bouton.png", 650, 50, 0.35f, controller::goMain);
+
+        addButton("placeholder/bouton.png", 150, 50, 0.35f, () -> {Gdx.app.exit();}); // oui - quitter
+        addButton("placeholder/bouton.png", 650, 50, 0.35f, controller::goMain); // non - retour vers Main menu
 
         keyIsPressed(Input.Keys.ESCAPE, () -> {Gdx.app.exit();});
     }

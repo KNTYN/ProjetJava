@@ -2,6 +2,7 @@ package fr.github.tcgame.model;
 
 import fr.github.tcgame.model.attack.Attack;
 import fr.github.tcgame.model.attack.AttackEffect;
+import fr.github.tcgame.model.audio.AudioSettings;
 import fr.github.tcgame.model.card.Card;
 import fr.github.tcgame.model.card.CardFactory;
 import fr.github.tcgame.model.deck.Deck;
@@ -12,14 +13,17 @@ import java.util.List;
 import java.util.Random;
 
 public class GameModel {
-
     // CONSTANTES
     public static final int MANA_GAIN_BASE         = 1;
     public static final int MANA_GAIN_INCREMENT    = 1;
     public static final int TURNS_BEFORE_INCREMENT = 5;
     public static final int INITIAL_HAND_SIZE      = 4;
 
-    public enum Status { EN_COURS, TERMINE }
+    public enum Status { OFF, ON }
+
+    // GESTION DU SON
+    private AudioSettings audioSettings;
+    private Status musicStatus;
 
     // ETAT DE LA PARTIE
     private final Player player1;
@@ -38,13 +42,11 @@ public class GameModel {
         this.deck = new Deck();
         this.random = new Random();
         this.turnNumber = 0;
-        this.status = Status.EN_COURS;
+        this.status = Status.ON;
         this.winner = null;
     }
 
-
     // INITIALISATION
-
     public void init() {
         List<Card> allCards = CardFactory.createAllCards();
         Collections.shuffle(allCards);
@@ -58,10 +60,7 @@ public class GameModel {
         }
     }
 
-
     // DEROULEMENT D'UN TOUR
-
-
     public void startTurn() {
         turnNumber++;
         int manaGain = getCurrentManaGain();
@@ -128,7 +127,7 @@ public class GameModel {
     // COMBAT
 
     public void resolveAttack(Player attacker, boolean useSpecial) {
-        if (status == Status.TERMINE) return;
+        if (status == Status.OFF) return;
 
         Player defender = getOpponent(attacker);
         Card atkCard = attacker.getActiveCard();
@@ -313,15 +312,15 @@ public class GameModel {
 
     public void checkEndCondition() {
         if (player1.getCrystal().isDestroyed()) {
-            status = Status.TERMINE;
+            status = Status.OFF;
             winner = player2;
         } else if (player2.getCrystal().isDestroyed()) {
-            status = Status.TERMINE;
+            status = Status.OFF;
             winner = player1;
         }
     }
 
-    public boolean isOver() { return status == Status.TERMINE; }
+    public boolean isOver() { return status == Status.OFF; }
 
     // =========================================================
     // UTILITAIRES
@@ -347,4 +346,5 @@ public class GameModel {
         return String.format("=== Tour %d | %s ===\n  %s\n  %s\n  %s",
             turnNumber, status, deck, player1, player2);
     }
+
 }

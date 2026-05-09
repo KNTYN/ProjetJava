@@ -5,36 +5,18 @@ import com.badlogic.gdx.Gdx;
 import fr.github.tcgame.control.MenuController;
 
 public class MenuManager {
+    private MenuController controller;
     private Menu actualMenu;
+
+    private SplashMenu splashMenu;
     private MainMenu mainMenu;
     private SelectionMenu selectionMenu;
-    private MenuController controller;
+    private CardListMenu cardListMenu;
+    private SettingsMenu settingsMenu;
     private QuitMenu quitMenu;
 
-    public MenuManager() {
-        controller = new MenuController(this);
-    }
 
-    public void changeMenu(Menu.TypeMenu typeMenu) {
-        if (actualMenu != null && actualMenu.typeMenu == typeMenu) return;
-        switch (typeMenu) {
-            case MAIN -> {
-                if (mainMenu == null) { mainMenu = new MainMenu(controller); }
-                actualMenu = mainMenu;
-            }
-            case SELECTION -> {
-                if (selectionMenu == null) { selectionMenu = new SelectionMenu(controller); }
-                actualMenu = selectionMenu;
-            }
-            case QUIT -> {
-                if (quitMenu == null) { quitMenu = new QuitMenu(controller); }
-                actualMenu = quitMenu;
-            }
-        }
-        if (actualMenu != null) {
-            Gdx.input.setInputProcessor(actualMenu.getStage());
-        }
-    }
+    public MenuManager(){}
 
     public void render() {
         if (actualMenu != null) { actualMenu.draw(); }
@@ -46,8 +28,42 @@ public class MenuManager {
         }
     }
     public void dispose(){
+        splashMenu.dispose();
         mainMenu.dispose();
         selectionMenu.dispose();
+        cardListMenu.dispose();
+        settingsMenu.dispose();
         quitMenu.dispose();
+    }
+
+    public void initMenu() {
+        this.controller=new MenuController(this);
+        splashMenu = new SplashMenu(controller);
+        mainMenu = new MainMenu(controller);
+        selectionMenu = new SelectionMenu(controller);
+        cardListMenu = new CardListMenu(controller);
+        settingsMenu = new SettingsMenu(controller);
+        quitMenu = new QuitMenu(controller);
+    }
+
+    public void changeMenu(Menu.TypeMenu typeMenu) {
+        if (actualMenu != null && actualMenu.typeMenu == typeMenu) return;
+        System.out.println(typeMenu);
+        switch (typeMenu) {
+            case MAIN -> actualMenu = mainMenu;
+
+            case SELECTION -> actualMenu = selectionMenu;
+
+            case QUIT -> actualMenu = quitMenu;
+
+            case SPLASH -> actualMenu = splashMenu;
+
+            case SETTINGS -> actualMenu = settingsMenu;
+
+            case CARDLIST -> actualMenu = cardListMenu;
+        }
+        if (actualMenu != null) {
+            Gdx.input.setInputProcessor(actualMenu.getStage());
+        }
     }
 }
