@@ -49,8 +49,6 @@ public class GameView extends Menu {
         refreshAll();
     }
 
-    // ==================== AFFICHAGE ====================
-
     private void refreshAll() {
         stage.clear();
         drawBackground();
@@ -65,18 +63,14 @@ public class GameView extends Menu {
 
     private void drawBackground() {
         Pixmap bg = new Pixmap(1, 1, Pixmap.Format.RGBA8888);
-        bg.setColor(0.08f, 0.08f, 0.12f, 1f);
-        bg.fill();
-        Image bgImg = new Image(new Texture(bg));
-        bg.dispose();
-        bgImg.setFillParent(true);
-        stage.addActor(bgImg);
+        bg.setColor(0.08f, 0.08f, 0.12f, 1f); bg.fill();
+        Image bgImg = new Image(new Texture(bg)); bg.dispose();
+        bgImg.setFillParent(true); stage.addActor(bgImg);
     }
 
     private void drawGear() {
         Image gear = new Image(gearTex);
-        gear.setSize(35, 35);
-        gear.setPosition(10, HEIGHT - 45);
+        gear.setSize(35, 35); gear.setPosition(10, HEIGHT - 45);
         gear.addListener(new ClickListener() {
             @Override public void clicked(InputEvent e, float x, float y) { controller.goPause(); }
         });
@@ -92,8 +86,6 @@ public class GameView extends Menu {
         addText(infoText, WIDTH/2f - 100, HEIGHT - 50, mc);
     }
 
-    // ==================== PANNEAU GAUCHE ====================
-
     private void drawLeftPanel() {
         float x = 10, y = HEIGHT - 100, gap = 42;
         Player p1 = gameModel.getPlayer1();
@@ -102,9 +94,10 @@ public class GameView extends Menu {
         addLeftButton("ECHANGER", x, y - gap*2, () -> setMode("swap_field", "Cliquez sur une carte du terrain"));
         addLeftButton("ATK NORMALE", x, y - gap*3, () -> setMode("chooseAttacker", "ATTAQUE NORMALE - Cliquez sur votre attaquant", false));
         addLeftButton("ATK SPECIALE", x, y - gap*4, () -> setMode("chooseAttacker", "ATTAQUE SPECIALE - Cliquez sur votre attaquant", true));
-        addLeftButton("SORT", x, y - gap*5, () -> setMode("spell", "Cliquez sur un sort dans votre main"));
-        addLeftButton("DEFAUSSER", x, y - gap*6, () -> setMode("discard", "Cliquez sur une carte a defausser"));
-        addLeftButton("PASSER", x, y - gap*7, () -> endTurn());
+        addLeftButton("SORT NORMAL", x, y - gap*5, () -> setMode("spell", "SORT NORMAL - Cliquez sur un sort dans votre main", false));
+        addLeftButton("SORT SPECIAL", x, y - gap*6, () -> setMode("spell", "SORT SPECIAL - Cliquez sur un sort dans votre main", true));
+        addLeftButton("DEFAUSSER", x, y - gap*7, () -> setMode("discard", "Cliquez sur une carte a defausser"));
+        addLeftButton("PASSER", x, y - gap*8, () -> endTurn());
         addText("Cristal: " + p1.getCrystal().getCurrentHp() + "/" + GameModel.CRISTAL_MAX_HP, x + 5, 80, Color.GREEN);
         addText("Mana: " + p1.getMana() + "/" + Player.MAX_MANA, x + 5, 60, Color.CYAN);
     }
@@ -123,8 +116,6 @@ public class GameView extends Menu {
         });
     }
 
-    // ==================== ZONE IA ====================
-
     private void drawIAZone() {
         addText("TERRAIN IA", 180, HEIGHT - 80, Color.LIGHT_GRAY);
         drawCardSlots(gameModel.getPlayer2().getFieldCards(), 180, HEIGHT - 220, 6, false);
@@ -136,8 +127,6 @@ public class GameView extends Menu {
         li.setPosition(0, HEIGHT/2f + 20); li.setSize(WIDTH, 2); stage.addActor(li);
     }
 
-    // ==================== ZONE JOUEUR ====================
-
     private void drawPlayerZone() {
         Player p1 = gameModel.getPlayer1();
         addText("TERRAIN VOUS", 180, HEIGHT/2f - 20, Color.LIGHT_GRAY);
@@ -147,8 +136,6 @@ public class GameView extends Menu {
         addText("MAIN (" + p1.getHand().size() + "/" + GameModel.MAX_HAND_SIZE + ")", 180, 55, Color.LIGHT_GRAY);
         drawCardSlots(p1.getHand(), 180, 10, 7, true);
     }
-
-    // ==================== SLOTS ====================
 
     private void drawCardSlots(List<Card> cards, float x, float y, int maxSlots, boolean isPlayer) {
         float sw = 90, sh = 55, gap = 6;
@@ -177,15 +164,11 @@ public class GameView extends Menu {
 
                 final Card card = c;
                 ci.addListener(new ClickListener() {
-                    @Override public void clicked(InputEvent e, float mx, float my) {
-                        handleClick(card);
-                    }
+                    @Override public void clicked(InputEvent e, float mx, float my) { handleClick(card); }
                 });
             }
         }
     }
-
-    // ==================== LOG ====================
 
     private void drawLog() {
         addText("LOG: " + logText, WIDTH - 350, 10, Color.LIGHT_GRAY);
@@ -196,7 +179,7 @@ public class GameView extends Menu {
     private void setMode(String mode, String msg) { setMode(mode, msg, false); }
     private void setMode(String mode, String msg, boolean special) {
         actionMode = mode; selectedCard = null; infoText = msg;
-        if (mode.equals("chooseAttacker")) useSpecialAttack = special;
+        if (mode.equals("chooseAttacker") || mode.equals("spell")) useSpecialAttack = special;
         refreshAll();
     }
 
@@ -214,14 +197,14 @@ public class GameView extends Menu {
                     gameModel.deployToBench(p1, card);
                     logText = card.getName() + " deployee"; infoText = "OK";
                 } else infoText = "Impossible";
-                resetMode(); break;
+                actionMode = ""; selectedCard = null; break;
 
             case "activate":
                 if (isBench && !p1.isNewlyDeployed(card) && p1.getFieldCards().size() < Player.MAX_FIELD_SIZE) {
                     gameModel.playFromBenchToField(p1, card);
                     logText = card.getName() + " activee"; infoText = "OK";
                 } else infoText = "Impossible";
-                resetMode(); break;
+                actionMode = ""; selectedCard = null; break;
 
             case "swap_field":
                 if (isField) { selectedCard = card; actionMode = "swap_bench"; infoText = "Cliquez sur une carte du banc"; }
@@ -231,7 +214,7 @@ public class GameView extends Menu {
                     gameModel.swapCard(p1, selectedCard, card);
                     logText = "Echange: " + selectedCard.getName() + " <-> " + card.getName(); infoText = "OK";
                 } else infoText = "Impossible";
-                resetMode(); break;
+                actionMode = ""; selectedCard = null; break;
 
             case "chooseAttacker":
                 if (isField && !alreadyAttacked.contains(card)) {
@@ -239,7 +222,7 @@ public class GameView extends Menu {
                     if (p1.getMana() >= cost) {
                         selectedCard = card; actionMode = "chooseTarget";
                         infoText = "Cliquez sur une cible ennemie";
-                    } else infoText = "Pas assez de mana !";
+                    } else { infoText = "Pas assez de mana !"; actionMode = ""; }
                 }
                 break;
 
@@ -248,16 +231,16 @@ public class GameView extends Menu {
                     String result = gameModel.resolveAttack(p1, selectedCard, isEnemy ? card : null, useSpecialAttack);
                     alreadyAttacked.add(selectedCard);
                     logText = result; infoText = "Attaque effectuee !";
-                    resetMode();
+                    actionMode = ""; selectedCard = null; useSpecialAttack = false;
                 }
                 break;
 
             case "spell":
                 if (isHand && (card.getFamily() == Card.Family.SORT || card.getType() == Card.Type.EVENT)) {
-                    selectedCard = card;
-                    actionMode = "spellVersion";
-                    infoText = "Choisissez la version du sort";
-                    showSpellPopup(card);
+                    String result = gameModel.resolveSpell(p1, card, useSpecialAttack, null);
+                    logText = result;
+                    infoText = (useSpecialAttack ? "Sort special lance !" : "Sort normal lance !");
+                    actionMode = ""; useSpecialAttack = false;
                 }
                 break;
 
@@ -265,7 +248,7 @@ public class GameView extends Menu {
                 if (isHand) {
                     gameModel.discardFromHand(p1, 0);
                     logText = "Carte defaussee"; infoText = "OK";
-                    resetMode();
+                    actionMode = "";
                 }
                 break;
         }
@@ -275,61 +258,10 @@ public class GameView extends Menu {
         refreshAll();
     }
 
-    // ==================== POPUP SORT ====================
-
-    private void showSpellPopup(Card spell) {
-        Player p1 = gameModel.getPlayer1();
-        float cx = WIDTH/2f - 150, cy = HEIGHT/2f - 30;
-
-        // Fond popup
-        Pixmap pp = new Pixmap(300, 100, Pixmap.Format.RGBA8888);
-        pp.setColor(0.1f, 0.1f, 0.2f, 0.95f); pp.fill();
-        pp.setColor(Color.GOLD); pp.drawRectangle(0, 0, 300, 100);
-        Image pi = new Image(new Texture(pp)); pp.dispose();
-        pi.setPosition(cx, cy); pi.setSize(300, 100); stage.addActor(pi);
-
-        addText("Choisir la version de " + spell.getName(), cx + 10, cy + 75, Color.WHITE);
-
-        // Bouton version normale
-        if (p1.getMana() >= spell.getNormalAtk().getCostMana()) {
-            addPopupButton(spell.getNormalAtk().getName() + " (" + spell.getNormalAtk().getCostMana() + " mana)", cx + 10, cy + 40, () -> {
-                String result = gameModel.resolveSpell(p1, spell, false, null);
-                logText = result; infoText = "Sort lance !"; resetMode();
-                if (gameModel.isOver()) { gameOver = true; logText = "Partie terminee !"; }
-                refreshAll();
-            });
-        }
-
-        // Bouton version spéciale
-        if (p1.getMana() >= spell.getSpecialAtk().getCostMana()) {
-            addPopupButton(spell.getSpecialAtk().getName() + " (" + spell.getSpecialAtk().getCostMana() + " mana)", cx + 10, cy + 5, () -> {
-                String result = gameModel.resolveSpell(p1, spell, true, null);
-                logText = result; infoText = "Sort lance !"; resetMode();
-                if (gameModel.isOver()) { gameOver = true; logText = "Partie terminee !"; }
-                refreshAll();
-            });
-        }
-    }
-
-    private void addPopupButton(String text, float x, float y, Runnable action) {
-        Pixmap px = new Pixmap(270, 28, Pixmap.Format.RGBA8888);
-        px.setColor(new Color(0.2f, 0.3f, 0.2f, 1f)); px.fill();
-        px.setColor(Color.GREEN); px.drawRectangle(0, 0, 270, 28);
-        Image btn = new Image(new Texture(px)); px.dispose();
-        btn.setPosition(x, y); btn.setSize(270, 28); stage.addActor(btn);
-        Label lbl = new Label(text, new Label.LabelStyle(font, Color.WHITE));
-        lbl.setPosition(x + 5, y + 5); stage.addActor(lbl);
-        btn.addListener(new ClickListener() {
-            @Override public void clicked(InputEvent e, float mx, float my) { action.run(); }
-        });
-    }
-
-    private void resetMode() { actionMode = ""; selectedCard = null; useSpecialAttack = false; }
-
     // ==================== FIN DE TOUR ====================
 
     private void endTurn() {
-        alreadyAttacked.clear(); resetMode();
+        alreadyAttacked.clear(); actionMode = ""; selectedCard = null;
         Player ia = gameModel.getPlayer2();
         for (Card c : new ArrayList<>(ia.getHand())) {
             if (c.getFamily() != Card.Family.SORT && ia.getBench().size() < Player.MAX_BENCH_SIZE && ia.getMana() >= c.getCost())
