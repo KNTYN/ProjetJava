@@ -286,7 +286,7 @@ public class GameView extends Menu {
         pp.setColor(0.1f, 0.1f, 0.2f, 0.95f); pp.fill();
         pp.setColor(Color.GOLD); pp.drawRectangle(0, 0, 300, 100);
         Image pi = new Image(new Texture(pp)); pp.dispose();
-        pi.setPosition(cx, cy); pi.setSize(300, 100); pi.setZIndex(1000); pi.setZIndex(1000); stage.addActor(pi);
+        pi.setPosition(cx, cy); pi.setSize(300, 100); stage.addActor(pi);
 
         addText("Choisir la version de " + spell.getName(), cx + 10, cy + 75, Color.WHITE);
 
