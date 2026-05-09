@@ -10,24 +10,27 @@ public class Crystal {
         this.currentHp = MAX_HP;
     }
 
+    public void setHp(int hp) {
+        this.currentHp = Math.min(MAX_HP, hp);
+    }
+
     public void takeDamage(int amount){
-        currentHp = Math.max(0,currentHp-amount);
+        currentHp = Math.max(0, currentHp - amount);
     }
 
     public void heal(int amount){
-        currentHp=Math.min(MAX_HP,currentHp+amount);
+        currentHp = Math.min(MAX_HP, currentHp + amount);
     }
 
     public boolean isDestroyed(){
-        return currentHp<=0;
+        return currentHp <= 0;
     }
 
-    public int getCurrentHp(){return currentHp;}
-    public int getMaxHp(){return MAX_HP;}
+    public int getCurrentHp(){ return currentHp; }
+    public int getMaxHp(){ return MAX_HP; }
 
     @Override
     public String toString(){
         return String.format("Cristal [%d/%d PV]", currentHp, MAX_HP);
     }
-
 }
