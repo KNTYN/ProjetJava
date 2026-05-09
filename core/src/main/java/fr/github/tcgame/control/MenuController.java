@@ -1,7 +1,10 @@
 package fr.github.tcgame.control;
 
+import fr.github.tcgame.model.audio.AudioSettings;
 import fr.github.tcgame.view.menu.Menu;
 import fr.github.tcgame.view.menu.MenuManager;
+
+import static fr.github.tcgame.view.MainGame.AUDIOSETTINGS;
 
 public class MenuController {
 
@@ -26,7 +29,11 @@ public class MenuController {
     public void quit() {
         menuManager.changeMenu(Menu.TypeMenu.QUIT);
     }
-    public void startGame() { System.out.println("START GAME"); }
+    public void startGame() {
+        System.out.println("START GAME");
+        menuManager.changeMenu(Menu.TypeMenu.GAME);
+        AUDIOSETTINGS.playMusic(AudioSettings.TypeMusic.GAME);
+    }
     // public void playMusic(){ System.out.println("MESSAGE TEST"); }
 
 

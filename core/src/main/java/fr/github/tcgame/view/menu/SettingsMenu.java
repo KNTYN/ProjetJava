@@ -12,7 +12,9 @@ public class SettingsMenu extends Menu{
 
     @Override
     protected void build() {
-        setBlackBackground();
+        setBackground("background/BG_settings.png");
+
+        addButton("button/arrow_return.png", "button/arrow_return.png", 50, 650, 1.5f, controller::goMain);
 
         addSlider(300, 500, 400, AUDIOSETTINGS.getGlobalVolume(),value -> AUDIOSETTINGS.setGlobalVolume(value)); // global
         addSlider(300, 400, 400, AUDIOSETTINGS.getMusicVolume(),value -> AUDIOSETTINGS.setMusicVolume(value)); // music

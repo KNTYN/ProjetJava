@@ -14,7 +14,7 @@ public class AudioSettings {
 
     public AudioSettings(){
         musicMenu=Gdx.audio.newMusic(Gdx.files.internal("musics/ph_music.mp3"));
-        musicGame=Gdx.audio.newMusic(Gdx.files.internal("musics/ph_music.mp3"));
+        musicGame=Gdx.audio.newMusic(Gdx.files.internal("musics/ph_gameMusic.mp3"));
     }
 
     public enum TypeMusic{MENU,GAME}
@@ -42,32 +42,23 @@ public class AudioSettings {
 
 
     public void playMusic(TypeMusic typeMusic) {
-
-        if (actualMusic!=null){
-            actualMusic.stop();
-        }
+        if (actualMusic!=null){ actualMusic.stop(); }
 
         switch (typeMusic){
             case MENU -> actualMusic=musicMenu;
             case GAME -> actualMusic=musicGame;
         }
-
         actualMusic.setLooping(true);
         this.updateMusicVolume();
         actualMusic.play();
     }
 
-    public void updateSound(){
-        updateMusicVolume();
-    }
+    public void updateSound(){ updateMusicVolume(); }
 
     public void updateMusicVolume(){
-        if (actualMusic != null) {
-            actualMusic.setVolume(getEffectiveMusicVolume());
-        }
+        if (actualMusic != null) { actualMusic.setVolume(getEffectiveMusicVolume()); }
     }
 
-    public void initMusic(){
-        playMusic(TypeMusic.MENU);
-    }
+    public void initMusic(){ playMusic(TypeMusic.MENU); }
+
 }

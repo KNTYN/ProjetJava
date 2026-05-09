@@ -1,7 +1,6 @@
 package fr.github.tcgame.view.menu;
 
 import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.audio.Music;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
@@ -12,20 +11,20 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.function.Consumer;
 
 import com.badlogic.gdx.utils.viewport.Viewport;
 import fr.github.tcgame.control.MenuController;
-import fr.github.tcgame.model.audio.AudioSettings;
 
 import static fr.github.tcgame.view.MainGame.AUDIOSETTINGS;
 
 
 public abstract class Menu {
-    public static final float WIDTH = 1280;
-    public static final float HEIGHT = 720;
+    public static final float WIDTH = 1920; // 1280
+    public static final float HEIGHT = 1080; // 720
+
+    private Texture mainTitleTexture;
+    private Image mainTitle;
 
     protected Group overlay;
     protected Stage stage;
@@ -35,7 +34,7 @@ public abstract class Menu {
     protected MenuController controller;
     protected com.badlogic.gdx.scenes.scene2d.ui.Skin skin;
 
-    public enum TypeMenu {SPLASH, MAIN, SELECTION, CARDLIST, SETTINGS, QUIT}
+    public enum TypeMenu {SPLASH, MAIN, SELECTION, CARDLIST, SETTINGS, QUIT, GAME}
     public TypeMenu typeMenu;
 
     public Menu(TypeMenu typeMenu, MenuController controller) {
@@ -52,6 +51,8 @@ public abstract class Menu {
         Gdx.input.setInputProcessor(stage);
 
         skin = new com.badlogic.gdx.scenes.scene2d.ui.Skin(Gdx.files.internal("ui/uiskin.json"));
+        this.mainTitleTexture=new Texture(Gdx.files.internal("background/main_title.png"));
+        this.mainTitle=new Image(mainTitleTexture);
 
         overlay = new Group();
         overlay.setVisible(false);
@@ -75,6 +76,9 @@ public abstract class Menu {
     public void dispose() {
         stage.dispose();
         this.skin.dispose();
+        if (mainTitleTexture != null) {
+            mainTitleTexture.dispose();
+        }
     }
 
     protected abstract void build();
@@ -86,11 +90,19 @@ public abstract class Menu {
         stage.addActor(bg);
     }
 
-    public void addButton(String texturePath, float x, float y, float size, Runnable action) {
+
+    public void addMainTitle() {
+        mainTitle.setPosition(WIDTH*0.005f, HEIGHT*0.05f);
+        mainTitle.setSize(WIDTH,HEIGHT);
+        stage.addActor(mainTitle);
+    }
+
+    /*
+    public void addButton(String texturePath, String texturePathHover, float x, float y, float size, Runnable action) {
         Texture texture = new Texture(Gdx.files.internal(texturePath));
         ImageButton button = new ImageButton(new TextureRegionDrawable(texture));
 
-        button.setPosition(x, y);
+        button.setPosition(x,y);
         button.setSize(texture.getWidth()*size,texture.getHeight()*size);
 
         com.badlogic.gdx.audio.Sound sfx = Gdx.audio.newSound(Gdx.files.internal("sfx/placeholder_button.mp3"));
@@ -105,8 +117,57 @@ public abstract class Menu {
             }
         });
 
+        button.addListener(new InputListener() {
+            @Override
+            public void enter(InputEvent event, float x, float y, int pointer, Actor fromActor) {
+                System.out.println("hover ON");
+            }
+
+            @Override
+            public void exit(InputEvent event, float x, float y, int pointer, Actor toActor) {
+                System.out.println("hover OFF");
+            }
+        });
+
         stage.addActor(button);
     }
+
+     */
+    public void addButton(String texturePath, String texturePathHover,
+                          float x, float y, float size, Runnable action) {
+
+        Texture normalTex = new Texture(Gdx.files.internal(texturePath));
+        Texture hoverTex = new Texture(Gdx.files.internal(texturePathHover));
+
+        TextureRegionDrawable normalDrawable = new TextureRegionDrawable(new TextureRegion(normalTex));
+        TextureRegionDrawable hoverDrawable = new TextureRegionDrawable(new TextureRegion(hoverTex));
+
+        ImageButton.ImageButtonStyle style = new ImageButton.ImageButtonStyle();
+        style.imageUp = normalDrawable;
+        style.imageOver = hoverDrawable;
+
+        ImageButton button = new ImageButton(style);
+
+        button.setPosition(x, y);
+        button.setSize(normalTex.getWidth() * size, normalTex.getHeight() * size);
+
+        com.badlogic.gdx.audio.Sound sfx =
+            Gdx.audio.newSound(Gdx.files.internal("sfx/placeholder_button.mp3"));
+
+        button.addListener(new ClickListener() {
+            @Override
+            public void clicked(InputEvent event, float x, float y) {
+                if (action != null) {
+                    sfx.play(AUDIOSETTINGS.getSfxVolume());
+                    action.run();
+                }
+            }
+        });
+
+        stage.addActor(button);
+    }
+
+
 
     public void keyIsPressed(int key, Runnable action) {
         stage.addListener(new InputListener() {
@@ -121,14 +182,7 @@ public abstract class Menu {
         });
     }
 
-    public void addSplashText(String text, float x, float y, float scale, Runnable action) {
-        Label label = new Label(text,this.skin);
-        label.setPosition(x, y);
-        label.setFontScale(scale);
-        label.setTouchable(Touchable.disabled);
-
-        stage.addActor(label);
-
+    public void addSplash(Runnable action) {
         stage.addListener(new InputListener() {
             @Override
             public boolean keyDown(InputEvent event, int keycode) {
@@ -144,11 +198,13 @@ public abstract class Menu {
         });
     }
 
+
     public void setBlackBackground() {
         Image bg = new Image(this.skin.newDrawable("white", com.badlogic.gdx.graphics.Color.BLACK));
         bg.setFillParent(true);
         stage.addActor(bg);
     }
+
 
     public void addSlider(float x, float y, float width, float initialValue, Consumer<Float> onChange) {
         Slider.SliderStyle style = new Slider.SliderStyle();
@@ -176,5 +232,6 @@ public abstract class Menu {
         });
         stage.addActor(slider);
     }
+
 
 }

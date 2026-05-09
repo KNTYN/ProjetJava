@@ -9,7 +9,9 @@ public class SplashMenu extends Menu{
 
     @Override
     protected void build() {
-        setBlackBackground();
-        addSplashText("coubeh", 400, 300, 2.0f, controller::goMain);
+        setBackground("background/BG_splashMenu.png");
+        addMainTitle();
+
+        addSplash(controller::goMain);
     }
 }

@@ -10,9 +10,12 @@ public class SelectionMenu extends Menu{
 
     @Override
     protected void build() {
-        setBackground("test/test.jpg");
-        addButton("placeholder/bouton.png", 450, 320, 0.35f, controller::startGame); // solo
-        addButton("placeholder/bouton.png", 450, 185, 0.35f, controller::goMain); // retour
+        setBackground("background/BG_MainMenu.png");
+        addMainTitle();
+
+        addButton("button/button_0012_SOLO.png","button/button_0009_SOLO2.png", 450, 300, 1.5f, controller::startGame); // solo
+        addButton("button/button_0011_LOCAL.png","button/button_0010_LOCAL2.png", 450, 200, 1.5f, controller::goMain); // local
+        addButton("button/button_0008_RETOUR.png", "button/button_0007_RETOUR2.png", 450, 100, 1.5f, controller::goMain); // retour
 
         keyIsPressed(Input.Keys.ESCAPE, controller::goMain);
     }

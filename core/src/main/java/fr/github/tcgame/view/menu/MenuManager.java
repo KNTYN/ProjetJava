@@ -1,5 +1,6 @@
 package fr.github.tcgame.view.menu;
 
+import com.badlogic.gdx.Game;
 import com.badlogic.gdx.Gdx;
 
 import fr.github.tcgame.control.MenuController;
@@ -14,7 +15,7 @@ public class MenuManager {
     private CardListMenu cardListMenu;
     private SettingsMenu settingsMenu;
     private QuitMenu quitMenu;
-
+    private GameMenu gameMenu;
 
     public MenuManager(){}
 
@@ -34,6 +35,7 @@ public class MenuManager {
         cardListMenu.dispose();
         settingsMenu.dispose();
         quitMenu.dispose();
+        gameMenu.dispose();
     }
 
     public void initMenu() {
@@ -44,23 +46,26 @@ public class MenuManager {
         cardListMenu = new CardListMenu(controller);
         settingsMenu = new SettingsMenu(controller);
         quitMenu = new QuitMenu(controller);
+        gameMenu = new GameMenu(controller);
     }
 
     public void changeMenu(Menu.TypeMenu typeMenu) {
         if (actualMenu != null && actualMenu.typeMenu == typeMenu) return;
         System.out.println(typeMenu);
         switch (typeMenu) {
+            case SPLASH -> actualMenu = splashMenu;
+
             case MAIN -> actualMenu = mainMenu;
 
             case SELECTION -> actualMenu = selectionMenu;
 
-            case QUIT -> actualMenu = quitMenu;
-
-            case SPLASH -> actualMenu = splashMenu;
+            case CARDLIST -> actualMenu = cardListMenu;
 
             case SETTINGS -> actualMenu = settingsMenu;
 
-            case CARDLIST -> actualMenu = cardListMenu;
+            case QUIT -> actualMenu = quitMenu;
+
+            case GAME -> actualMenu = gameMenu;
         }
         if (actualMenu != null) {
             Gdx.input.setInputProcessor(actualMenu.getStage());

@@ -10,12 +10,13 @@ public class QuitMenu extends Menu{
     }
     @Override
     protected void build() {
-        setBackground("placeholder/BG_QuitMenu.jpg");
+        setBackground("background/BG_MainMenu.png");
+        addMainTitle();
 
-        addButton("placeholder/bouton.png", 150, 50, 0.35f, () -> {Gdx.app.exit();}); // oui - quitter
-        addButton("placeholder/bouton.png", 650, 50, 0.35f, controller::goMain); // non - retour vers Main menu
+        addButton("button/button_0001_QUITTER.png", "button/button_0000_QUITTER2.png", 150, 50, 1.5f, () -> {Gdx.app.exit();}); // quitter def
+        addButton("button/button_0008_RETOUR.png", "button/button_0007_RETOUR2.png", 650, 50, 1.5f, controller::goMain); // non - retour vers Main menu
 
-        keyIsPressed(Input.Keys.ESCAPE, () -> {Gdx.app.exit();});
+        keyIsPressed(Input.Keys.ESCAPE, controller::goMain);
     }
 
 }
