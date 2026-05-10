@@ -22,7 +22,7 @@ public class ActiveView {
 
         if (activeCard != null) {
             float x = 1089;
-            float y = (idP == 1) ? 291 : 491; // P2 au-dessus de P1
+            float y = (idP == 1) ? 291 : 591; // P2 au-dessus de P1
             CARDV.displayCard(activeCard, idP, x, y, 150, 210, "active");
         }
     }

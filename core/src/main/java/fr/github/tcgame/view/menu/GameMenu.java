@@ -12,6 +12,8 @@ import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import fr.github.tcgame.control.AIController;
 import fr.github.tcgame.control.MenuController;
+import fr.github.tcgame.model.player.Crystal;
+import fr.github.tcgame.view.player.CrystalView;
 
 import java.util.function.Consumer;
 
@@ -46,6 +48,16 @@ public class GameMenu extends Menu {
     protected void build() {
         setBackground("background/BG_game.png");
 
+        Image benchDecor = new Image(new TextureRegionDrawable(new Texture("background/bench.png")));
+        benchDecor.setPosition(400, 600);
+        benchDecor.setTouchable(Touchable.disabled);
+        stage.addActor(benchDecor);
+
+        Image activeDecor = new Image(new TextureRegionDrawable(new Texture("background/card_back.png")));
+        activeDecor.setPosition(1100, 600);
+        activeDecor.setTouchable(Touchable.disabled);
+        stage.addActor(activeDecor);
+
         coinTex = new Texture("items/coin.png");
         manaTex = new Texture("items/mana.png");
 
@@ -74,6 +86,9 @@ public class GameMenu extends Menu {
         ai = new AIController(controller);
 
         CARDV.setStage(stage);
+        CrystalView.getInstance().setStage(stage);
+        CrystalView.getInstance().displayCrystal(1, Crystal.MAX_HP);
+        CrystalView.getInstance().displayCrystal(2, Crystal.MAX_HP);
 
         keyIsPressed(Input.Keys.A, () -> { controller.debug(); });
 

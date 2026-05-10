@@ -1,7 +1,6 @@
 package fr.github.tcgame.model.player;
 
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.graphics.Texture;
+import fr.github.tcgame.view.player.CrystalView;
 
 public class Crystal {
     final public static int MAX_HP=100;
@@ -14,8 +13,7 @@ public class Crystal {
 
     public int getHealth(){ return this.currentHp; }
 
-    // quand on se prend un dégât, update la texture
-    public void updateTexture(){
-
+    public void updateTexture() {
+        CrystalView.getInstance().displayCrystal(idPlayer, currentHp);
     }
 }
