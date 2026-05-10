@@ -8,6 +8,7 @@ import fr.github.tcgame.view.menu.Menu;
 import fr.github.tcgame.view.menu.MenuManager;
 
 import static fr.github.tcgame.model.GameModel.P1;
+import static fr.github.tcgame.model.GameModel.P2;
 import static fr.github.tcgame.model.player.Player.HANDV1;
 import static fr.github.tcgame.view.MainGame.*;
 
@@ -42,7 +43,7 @@ public class MenuController {
     }
 
     public void moveCardToBench(int idP) {
-        Player p = (idP == 1) ? GM.P1 : GM.P2;
+        Player p = (idP == 1) ? GM.P1 : P2;
         if (p.getSelectedCard() != null) {
             System.out.println("🔄 Déplacement de " + p.getSelectedCard() + " vers le bench");
             p.cardHandToBench(p.getSelectedCard());
@@ -63,7 +64,7 @@ public class MenuController {
     }
 
     public void deployToActive(int idP) {
-        Player p = (idP == 1) ? GM.P1 : GM.P2;
+        Player p = (idP == 1) ? GM.P1 : P2;
 
         if (p.getSelectedCard() != null) {
             System.out.println("⚡ Déploiement de " + p.getSelectedCard() + " en active");
@@ -82,6 +83,13 @@ public class MenuController {
         } else {
             System.out.println("⚠️ Aucune carte sélectionnée");
         }
+    }
+
+
+    public void attack(int idP, int dmg){ // c'est celui qui attaque et non celui qui subit l'attaque
+        Player p = idP==1 ? P2 : P1;
+        p.takeDamage(dmg);
+        p.checkDeath();
     }
 
 }

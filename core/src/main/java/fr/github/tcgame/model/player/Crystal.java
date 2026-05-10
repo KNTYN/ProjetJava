@@ -8,11 +8,11 @@ public class Crystal {
     public int currentHp=MAX_HP;
     public int idPlayer;
 
-    public Crystal(int idP){
-        this.idPlayer=idP;
-    }
+    public Crystal(int idP){ this.idPlayer=idP; }
 
     // draw method avec CrystalView
+
+    public int getHealth(){ return this.currentHp; }
 
     // quand on se prend un dégât, update la texture
     public void updateTexture(){
