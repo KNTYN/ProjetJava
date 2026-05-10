@@ -59,4 +59,6 @@ public class Card {
     public Zone getZone() { return zone; }
     public void setZone(Zone zone) { this.zone = zone; }
 
+    public int getCost(){ return this.cost; }
+
 }

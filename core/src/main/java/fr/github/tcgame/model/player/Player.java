@@ -29,6 +29,9 @@ public class Player {
 
     public Card selectedCard;
 
+    public static int MAX_MANA=10;
+    // pas de max sur les pieces, vu que le jeu est capitaliste
+
     public int mana=3;
     public int piece=6;
 
@@ -128,13 +131,14 @@ public class Player {
         System.out.println("🔍 cardHandToBench appelé avec : " + c);
         System.out.println("🔍 hasSlot(bench) = " + hasSlot(this.bench));
 
-        if (hasSlot(this.bench) && c!=null && c.getZone().equals(Card.Zone.HAND)) {
+        if (hasSlot(this.bench) && c!=null && c.getZone().equals(Card.Zone.HAND) && c.getCost()<=this.piece) {
             System.out.println("✅ Slot disponible, ajout au bench...");
             addCardToBench(c);
             System.out.println("✅ Carte ajoutée au bench");
             removeCardFromHand(c);
             System.out.println("✅ Carte retirée de la main");
-            System.out.println("dd");
+            this.piece-=c.getCost();
+            System.out.println("✅ Retrait de pièces : ("+this.piece+")");
         } else {
             errorEvent();
         }
