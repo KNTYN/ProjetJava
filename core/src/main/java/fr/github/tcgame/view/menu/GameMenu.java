@@ -42,10 +42,10 @@ public class GameMenu extends Menu{
             System.out.println("Debug Touch");
         });
     }
-
+ //
     private void addCoinDisplay() {
 
-        Table coinTable = new Table();
+        Table  coinTable = new Table();
         coinTable.setPosition(50, 200);
 
         Texture coinTexture = new Texture("items/coin.png");
