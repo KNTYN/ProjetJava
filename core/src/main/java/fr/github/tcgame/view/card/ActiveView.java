@@ -16,18 +16,14 @@ public class ActiveView {
             return;
         }
 
-        CARDV.clearActiveCards(); // ← Clear seulement l'active slot
+        CARDV.clearActiveCards(idP); // ← idP passé, n'efface que la sienne
 
         Card activeCard = (idP == 1) ? P1.getActiveCard() : P2.getActiveCard();
 
         if (activeCard != null) {
-            float x = 1089; // Position centrale pour l'active
-            float y = 291;
-            if (idP == 1) {
-                CARDV.displayCard(activeCard, idP, x, y, 150, 210, "active");
-            } else {
-                CARDV.displayCard(activeCard, idP, x, y, 150, 510, "active");
-            }
+            float x = 1089;
+            float y = (idP == 1) ? 291 : 491; // P2 au-dessus de P1
+            CARDV.displayCard(activeCard, idP, x, y, 150, 210, "active");
         }
     }
 }

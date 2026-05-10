@@ -10,6 +10,7 @@ import com.badlogic.gdx.scenes.scene2d.Touchable;
 import com.badlogic.gdx.scenes.scene2d.ui.*;
 import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
+import fr.github.tcgame.control.AIController;
 import fr.github.tcgame.control.MenuController;
 
 import java.util.function.Consumer;
@@ -20,6 +21,10 @@ import static fr.github.tcgame.view.MainGame.AUDIOSETTINGS;
 import static fr.github.tcgame.view.MainGame.CARDV;
 
 public class GameMenu extends Menu {
+
+    // Ajout en haut de la classe
+    private AIController ai;
+    private boolean aiPlaying = false;
 
     private boolean paused = false;
     private Group pauseOverlay;
@@ -66,6 +71,7 @@ public class GameMenu extends Menu {
 
         // L'overlay est créé ici mais sera géré dans le draw() pour le Z-Index
         createPauseOverlay();
+        ai = new AIController(controller);
 
         CARDV.setStage(stage);
 
@@ -151,6 +157,18 @@ public class GameMenu extends Menu {
         if (WIN) {
             controller.goWin();
             return;
+        }
+
+        // Tour de l'IA
+        if (playerTurn == 2 && !aiPlaying && !paused) {
+            aiPlaying = true;
+            new Thread(() -> {
+                try { Thread.sleep(800); } catch (InterruptedException ignored) {}
+                com.badlogic.gdx.Gdx.app.postRunnable(() -> {
+                    ai.playTurn();
+                    aiPlaying = false;
+                });
+            }).start();
         }
 
         super.draw();

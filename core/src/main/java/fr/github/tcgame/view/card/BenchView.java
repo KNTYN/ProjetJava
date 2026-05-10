@@ -16,7 +16,7 @@ public class BenchView {
             return;
         }
 
-        CARDV.clearBenchCards();
+        CARDV.clearBenchCards(idP); // ← idP passé
 
         float spacing = 170;
         Card[] bench = (idP == 1) ? P1.getBench() : P2.getBench();
@@ -24,8 +24,8 @@ public class BenchView {
         for (int i = 0; i < bench.length; i++) {
             if (bench[i] != null) {
                 float x = 400 + (i * spacing);
-                float y = 300;
-                CARDV.displayCard(bench[i], idP, x, y, 150, 210, "bench"); // ← "bench"
+                float y = (idP == 1) ? 300 : 600; // bench P2 plus haut
+                CARDV.displayCard(bench[i], idP, x, y, 150, 210, "bench");
             }
         }
     }

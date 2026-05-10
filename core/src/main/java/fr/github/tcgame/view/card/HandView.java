@@ -16,7 +16,7 @@ public class HandView {
             return;
         }
 
-        CARDV.clearHandCards();
+        CARDV.clearHandCards(idP); // ← idP passé
 
         float spacing = 170;
         Card[] hand = (idP == 1) ? P1.getHand() : P2.getHand();
@@ -24,7 +24,8 @@ public class HandView {
         for (int i = 0; i < hand.length; i++) {
             if (hand[i] != null) {
                 float x = 500 + (i * spacing);
-                CARDV.displayCard(hand[i], idP, x, 75, 150, 210, "hand"); // ← "hand"
+                float y = (idP == 1) ? 75 : 815; // main P2 en haut
+                CARDV.displayCard(hand[i], idP, x, y, 150, 210, "hand");
             }
         }
     }

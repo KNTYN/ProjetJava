@@ -12,71 +12,62 @@ import fr.github.tcgame.model.card.Card;
 import java.util.ArrayList;
 import java.util.List;
 
-import static fr.github.tcgame.model.GameModel.setSelectedCard;
+import static fr.github.tcgame.model.GameModel.*;
 
 public class CardView {
     private static CardView instance;
     private Stage stage;
 
-    private List<ImageButton> handCards = new ArrayList<>();
-    private List<ImageButton> benchCards = new ArrayList<>();
-    private List<ImageButton> activeCards = new ArrayList<>();
+    // Listes séparées par joueur ET par zone
+    private final List<ImageButton> handCardsP1  = new ArrayList<>();
+    private final List<ImageButton> benchCardsP1 = new ArrayList<>();
+    private final List<ImageButton> activeCardsP1 = new ArrayList<>();
+
+    private final List<ImageButton> handCardsP2  = new ArrayList<>();
+    private final List<ImageButton> benchCardsP2 = new ArrayList<>();
+    private final List<ImageButton> activeCardsP2 = new ArrayList<>();
 
     public CardView() {}
 
     public static CardView getInstance() {
-        if (instance == null) {
-            instance = new CardView();
-        }
+        if (instance == null) instance = new CardView();
         return instance;
     }
 
-    public void setStage(Stage stage) {
-        this.stage = stage;
-    }
+    public void setStage(Stage stage) { this.stage = stage; }
+    public Stage getStage() { return stage; }
 
-    public Stage getStage() {
-        return stage;
-    }
-
-    /**
-     * Permet d'activer ou de désactiver les clics sur TOUTES les cartes.
-     * Très utile pour le menu pause.
-     */
-    public void setTouchable(Touchable touchable) {
-        for (ImageButton card : handCards) card.setTouchable(touchable);
-        for (ImageButton card : benchCards) card.setTouchable(touchable);
-        for (ImageButton card : activeCards) card.setTouchable(touchable);
-    }
-
-    public void clearHandCards() {
-        for (ImageButton card : handCards) {
-            card.remove();
+    // ── Touchable global (pause) ──────────────────────────────────────────────
+    public void setTouchable(Touchable t) {
+        for (List<ImageButton> list : allLists()) {
+            for (ImageButton b : list) b.setTouchable(t);
         }
-        handCards.clear();
     }
 
-    public void clearBenchCards() {
-        for (ImageButton card : benchCards) {
-            card.remove();
-        }
-        benchCards.clear();
-    }
-
-    public void clearActiveCards() {
-        for (ImageButton card : activeCards) {
-            card.remove();
-        }
-        activeCards.clear();
-    }
+    // ── Clear par joueur + zone ───────────────────────────────────────────────
+    public void clearHandCards(int idP)   { clear(idP == 1 ? handCardsP1  : handCardsP2);  }
+    public void clearBenchCards(int idP)  { clear(idP == 1 ? benchCardsP1 : benchCardsP2); }
+    public void clearActiveCards(int idP) { clear(idP == 1 ? activeCardsP1 : activeCardsP2); }
 
     public void clearAllCards() {
-        clearHandCards();
-        clearBenchCards();
-        clearActiveCards();
+        for (List<ImageButton> list : allLists()) clear(list);
     }
 
-    public void displayCard(Card card, int playerOwner, float x, float y, float width, float height, String zone) {
+    private void clear(List<ImageButton> list) {
+        for (ImageButton b : list) b.remove();
+        list.clear();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<List<ImageButton>> allLists() {
+        return List.of(handCardsP1, benchCardsP1, activeCardsP1,
+            handCardsP2, benchCardsP2, activeCardsP2);
+    }
+
+    // ── Affichage ─────────────────────────────────────────────────────────────
+    public void displayCard(Card card, int playerOwner, float x, float y,
+                            float width, float height, String zone) {
+
         TextureRegionDrawable drawable = new TextureRegionDrawable(
             new TextureRegion(card.getCardTexture())
         );
@@ -88,21 +79,24 @@ public class CardView {
         cardButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                // On vérifie si le bouton est touchable (sécurité supplémentaire)
-                if (cardButton.getTouchable() == Touchable.enabled) {
-                    System.out.println("✅ CARTE CLIQUÉE : " + card + " (zone: " + zone + ")");
-                    setSelectedCard(card, playerOwner);
-                }
+                // Seul le joueur dont c'est le tour peut sélectionner SES propres cartes
+                if (cardButton.getTouchable() != Touchable.enabled) return;
+                if (playerOwner != playerTurn) return;
+
+                System.out.println("✅ CARTE CLIQUÉE : " + card + " (zone: " + zone + ", P" + playerOwner + ")");
+                setSelectedCard(card, playerOwner);
             }
         });
 
         stage.addActor(cardButton);
 
-        // Ajouter à la bonne liste
-        switch (zone) {
-            case "hand" -> handCards.add(cardButton);
-            case "bench" -> benchCards.add(cardButton);
-            case "active" -> activeCards.add(cardButton);
-        }
+        // Ajout dans la bonne liste
+        List<ImageButton> target = switch (zone) {
+            case "hand"   -> playerOwner == 1 ? handCardsP1  : handCardsP2;
+            case "bench"  -> playerOwner == 1 ? benchCardsP1 : benchCardsP2;
+            case "active" -> playerOwner == 1 ? activeCardsP1 : activeCardsP2;
+            default -> throw new IllegalArgumentException("Zone inconnue : " + zone);
+        };
+        target.add(cardButton);
     }
 }

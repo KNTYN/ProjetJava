@@ -3,6 +3,9 @@ package fr.github.tcgame.model.card;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Texture;
 
+import static java.lang.Math.max;
+import static java.lang.Math.min;
+
 public class Card {
 
     public enum Family { CAPITALISTE, MAUDIT, PRODIGE, GOOFY, SORT, EVENT }
@@ -64,4 +67,16 @@ public class Card {
     public int getNormalAtk() { return this.normalAtk; }
     public int getSpecialAtk() { return this.specialAtk; }
     public int getManaCost() { return this.mana; }
+
+    public int getDamage(int dmg) {
+        int absorbed = min(dmg, this.hp); // dégâts que la carte absorbe
+        this.hp = max(0, this.hp - dmg);
+        if (this.hp == 0) { deathCard(); }
+        return dmg - absorbed; // surplus transmis au cristal
+    }
+
+    public void deathCard(){
+        this.zone=Zone.OFFF;
+        // reset completement de l'affichage
+    }
 }

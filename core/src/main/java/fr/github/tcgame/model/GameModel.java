@@ -6,8 +6,7 @@ import fr.github.tcgame.model.player.Player;
 
 import java.util.Arrays;
 
-import static fr.github.tcgame.model.player.Player.HANDV1;
-import static fr.github.tcgame.model.player.Player.WIN;
+import static fr.github.tcgame.model.player.Player.*;
 
 public class GameModel {
     // CONSTANTES
@@ -51,6 +50,8 @@ public class GameModel {
         System.out.println("P1 HAND : " + Arrays.toString(P1.getHand()));
         System.out.println("P2 HAND : " + Arrays.toString(P2.getHand()));
         HANDV1.displayHand(1);
+        BENCHV2.displayBench(2);
+        ACTIVEV2.displayActive(2);
     }
 
     public int getIdPlayerTurn(){ return playerTurn; }
