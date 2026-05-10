@@ -1,14 +1,12 @@
 package fr.github.tcgame.control;
 
-import fr.github.tcgame.model.GameModel;
 import fr.github.tcgame.model.audio.AudioSettings;
 import fr.github.tcgame.model.player.Player;
-import fr.github.tcgame.view.card.HandView;
 import fr.github.tcgame.view.menu.Menu;
 import fr.github.tcgame.view.menu.MenuManager;
 
 import static fr.github.tcgame.model.GameModel.*;
-import static fr.github.tcgame.model.player.Player.HANDV1;
+import static fr.github.tcgame.model.player.Player.WIN;
 import static fr.github.tcgame.view.MainGame.*;
 
 public class MenuController {
@@ -93,6 +91,9 @@ public class MenuController {
             victim.takeDamage(attacker.activeCard.getNormalAtk());
             System.out.println(victim.getHp());
             GM.checkVictory();
+            if (!WIN){
+                GM.nextTurn();
+            }
         } else { attacker.errorEvent(); }
 
     }
@@ -107,7 +108,10 @@ public class MenuController {
                 victim.takeDamage(attacker.getActiveCard().getSpecialAtk());
                 System.out.println(victim.getHp());
                 GM.checkVictory();
-            }
+                if (!WIN){
+                    GM.nextTurn();
+                }
+            } else { attacker.errorEvent(); }
         } else { attacker.errorEvent(); }
     }
 
@@ -116,7 +120,7 @@ public class MenuController {
     }
 
     public void debug(){
-        GM.nextTurn();
+        passed();
     }
 
 }

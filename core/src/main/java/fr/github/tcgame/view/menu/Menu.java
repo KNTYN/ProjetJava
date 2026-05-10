@@ -13,12 +13,10 @@ import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 
 
-import java.util.Objects;
 import java.util.function.Consumer;
 
 import com.badlogic.gdx.utils.viewport.Viewport;
 import fr.github.tcgame.control.MenuController;
-import fr.github.tcgame.model.card.Card;
 
 import static fr.github.tcgame.view.MainGame.AUDIOSETTINGS;
 
@@ -59,7 +57,7 @@ public abstract class Menu {
     protected float libraryGapY;
     protected int libraryCardsPerRow;
 
-    public enum TypeMenu {SPLASH, MAIN, SELECTION, CARDLIST, SETTINGS, QUIT, GAME, WIN}
+    public enum TypeMenu {SPLASH, MAIN, SELECTION, CARDLIST, SETTINGS, QUIT, GAME, WIN, PAUSE}
     public TypeMenu typeMenu;
 
     public Menu(TypeMenu typeMenu, MenuController controller) {
