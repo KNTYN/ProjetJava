@@ -13,8 +13,8 @@ public class AudioSettings {
     public Music actualMusic;
 
     public AudioSettings(){
-        musicMenu=Gdx.audio.newMusic(Gdx.files.internal("musics/ph_music.mp3"));
-        musicGame=Gdx.audio.newMusic(Gdx.files.internal("musics/ph_gameMusic.mp3"));
+        musicMenu=Gdx.audio.newMusic(Gdx.files.internal("musics/TastyCrousty Card Game #3.mp3"));
+        musicGame=Gdx.audio.newMusic(Gdx.files.internal("musics/TastyCrousty Card Game #2.mp3"));
     }
 
     public enum TypeMusic{MENU,GAME}

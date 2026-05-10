@@ -19,7 +19,8 @@ public class CardListMenu extends Menu {
             50,
             890,
             1.5f,
-            controller::goMain
+            controller::goMain,
+            "sfx/Click_stereo.ogg.mp3"
         );
 
         addSearch(WIDTH / 2f - 700, 825, 540, this::refreshCards);

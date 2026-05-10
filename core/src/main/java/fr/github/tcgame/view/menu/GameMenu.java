@@ -48,7 +48,7 @@ public class GameMenu extends Menu {
         // =========================
         // BOUTON BENCH
         // =========================
-        addButton("background/bench.png", "background/bench.png", 300, 300, 1f, () -> {
+        addButton("background/bench.png", "background/bench.png", 400, 300, 1f, () -> {
             if (playerTurn == 1)
                 controller.moveCardToBench(1);
         });
@@ -56,7 +56,7 @@ public class GameMenu extends Menu {
         // =========================
         // BOUTON DEPLOY ACTIVE
         // =========================
-        addButton("background/card_back.png", "background/card_back.png", 900, 300, 1f, () -> {
+        addButton("background/card_back.png", "background/card_back.png", 1100, 300, 1f, () -> {
             if (playerTurn == 1)
                 controller.deployToActive(1);
         });
@@ -64,7 +64,7 @@ public class GameMenu extends Menu {
         // =========================
         // BOUTON ATTAQUE
         // =========================
-        addButton("button/attaque.png", "button/attaque_pressed.png", 1200, 300, 1f, () -> {
+        addButton("button/attaque.png", "button/attaque_pressed.png", 1300, 430, 1f, () -> {
             if (playerTurn == 1)
                 controller.attack(1);
         }, ButtonMode.PRESSED);
@@ -72,7 +72,7 @@ public class GameMenu extends Menu {
         // =========================
         // BOUTON SPECIALE
         // =========================
-        addButton("button/speciale.png", "button/speciale_pressed.png", 1200, 250, 1f, () -> {
+        addButton("button/speciale.png", "button/speciale_pressed.png", 1300, 370, 1f, () -> {
             if (playerTurn == 1)
                 controller.attackSpecial(1);
         }, ButtonMode.PRESSED);
@@ -80,7 +80,7 @@ public class GameMenu extends Menu {
         // =========================
         // BOUTON PASSER
         // =========================
-        addButton("button/passer.png", "button/passer_pressed.png", 1200, 200, 1f, () -> {
+        addButton("button/passer.png", "button/passer_pressed.png", 1300, 310, 1f, () -> {
             if (playerTurn == 1)
                 controller.passed();
         }, ButtonMode.PRESSED);

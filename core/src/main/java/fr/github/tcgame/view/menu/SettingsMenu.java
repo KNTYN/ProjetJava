@@ -14,7 +14,7 @@ public class SettingsMenu extends Menu{
     protected void build() {
         setBackground("background/BG_settings.png");
 
-        addButton("button/arrow_return.png", "button/arrow_return_gold.png", 50, 890    , 1.5f, controller::goMain);
+        addButton("button/arrow_return.png", "button/arrow_return_gold.png", 50, 890    , 1.5f, controller::goMain,"sfx/Click_stereo.ogg.mp3");
 
         addSlider(WIDTH/2 - 200, 590, 400, AUDIOSETTINGS.getGlobalVolume(),value -> AUDIOSETTINGS.setGlobalVolume(value)); // global
         addSlider(WIDTH/2 - 200, 425, 400, AUDIOSETTINGS.getMusicVolume(),value -> AUDIOSETTINGS.setMusicVolume(value)); // music
