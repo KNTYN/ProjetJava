@@ -7,8 +7,7 @@ import fr.github.tcgame.view.card.HandView;
 import fr.github.tcgame.view.menu.Menu;
 import fr.github.tcgame.view.menu.MenuManager;
 
-import static fr.github.tcgame.model.GameModel.P1;
-import static fr.github.tcgame.model.GameModel.P2;
+import static fr.github.tcgame.model.GameModel.*;
 import static fr.github.tcgame.model.player.Player.HANDV1;
 import static fr.github.tcgame.view.MainGame.*;
 
@@ -31,6 +30,7 @@ public class MenuController {
     public void goSettings() {
         menuManager.changeMenu(Menu.TypeMenu.SETTINGS);
     }
+    public void goWin() { menuManager.changeMenu(Menu.TypeMenu.WIN); }
 
     public void quit() {
         menuManager.changeMenu(Menu.TypeMenu.QUIT);
@@ -86,10 +86,37 @@ public class MenuController {
     }
 
 
-    public void attack(int idP, int dmg){ // c'est celui qui attaque et non celui qui subit l'attaque
-        Player p = idP==1 ? P2 : P1;
-        p.takeDamage(dmg);
-        p.checkDeath();
+    public void attack(int idP){ // c'est celui qui attaque et non celui qui subit l'attaque
+        Player attacker = idP==1 ? P1 : P2;
+        Player victim = idP==1 ? P2 : P1;
+        if (attacker.activeCard!=null){
+            victim.takeDamage(attacker.activeCard.getNormalAtk());
+            System.out.println(victim.getHp());
+            GM.checkVictory();
+        } else { attacker.errorEvent(); }
+
+    }
+
+
+    public void attackSpecial(int idP){ // c'est celui qui attaque et non celui qui subit l'attaque
+        Player attacker = idP==1 ? P1 : P2;
+        Player victim = idP==1 ? P2 : P1;
+        if (attacker.activeCard!=null){
+            if (attacker.enoughMana(attacker.getActiveCard().getManaCost())){
+                attacker.costMana(attacker.getActiveCard().getManaCost());
+                victim.takeDamage(attacker.getActiveCard().getSpecialAtk());
+                System.out.println(victim.getHp());
+                GM.checkVictory();
+            }
+        } else { attacker.errorEvent(); }
+    }
+
+    public void passed(){
+        GM.nextTurn();
+    }
+
+    public void debug(){
+        GM.nextTurn();
     }
 
 }

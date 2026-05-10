@@ -5,14 +5,13 @@ import fr.github.tcgame.view.card.ActiveView;
 import fr.github.tcgame.view.card.BenchView;
 import fr.github.tcgame.view.card.HandView;
 
-import java.util.List;
-
 import static fr.github.tcgame.model.GameModel.MAX_CARD_BENCH;
 import static fr.github.tcgame.model.GameModel.MAX_CARD_HAND;
 import static java.lang.Math.max;
 
 public class Player {
-    private boolean win=false;
+    public static boolean WIN = false;
+    public static int WINNER_ID = 0; // 0 = aucun, 1 = P1, 2 = P2
 
     public Crystal crystal;
 
@@ -31,93 +30,117 @@ public class Player {
 
     public Card selectedCard;
 
-    public static int MAX_MANA=10;
-    // pas de max sur les pieces, vu que le jeu est capitaliste
+    public static int MAX_MANA = 10;
 
-    public int mana=3;
-    public int piece=6;
+    public int mana = 3;
+    public int piece = 6;
+    private int idPlayer; // ← Pour savoir qui a gagné
 
-    public Player(int idP){
-        this.crystal=new Crystal(idP);
+    public Player(int idP) {
+        this.crystal = new Crystal(idP);
+        this.idPlayer = idP;
     }
-
 
     public boolean enoughMana(int mana) {
-        return this.mana>=mana;
+        return this.mana >= mana;
     }
+
     public void addMana(int mana) {
-        this.mana+=mana;
+        this.mana += mana;
     }
+
     public void costMana(int mana) {
-        this.mana-=mana;
+        this.mana -= mana;
     }
+
     public boolean enoughPiece(int piece) {
-        return this.piece>=piece;
+        return this.piece >= piece;
     }
+
     public void addPiece(int piece) {
-        this.piece+=piece;
+        this.piece += piece;
     }
+
     public void costPiece(int piece) {
-        this.piece-=piece;
+        this.piece -= piece;
     }
 
-    public Card getSelectedCard() { return selectedCard; } // derniere carte selectionnée
-    public void resetSelectionCard(){ this.selectedCard=null; } // reset la selection de carte
+    public Card getSelectedCard() {
+        return selectedCard;
+    }
 
-    public Card getActiveCard() { return activeCard; } // getter activeCard
+    public void resetSelectionCard() {
+        this.selectedCard = null;
+    }
 
-    public void deployActiveCard(Card c){ // deployer une carte sur le slot actif
-        if (this.activeCard==null && c.getZone().equals(Card.Zone.BENCH)){
-            this.activeCard=c;
+    public Card getActiveCard() {
+        return activeCard;
+    }
+
+    public void deployActiveCard(Card c) {
+        if (this.activeCard == null && c.getZone().equals(Card.Zone.BENCH)) {
+            this.activeCard = c;
             removeCardFromBench(c);
             c.setZone(Card.Zone.ACTIVE);
-        }
-        else { errorEvent(); }
-    }
-
-    public void removeActiveCard(){this.activeCard=null; } // remove l'active card
-
-    public boolean hasSlot(Card[] tab){ // s'il y a un slot pour une nouvelle carte dans la hand ou bench
-        int currentItems=0;
-
-        for (Card c : tab) { if (c != null) { currentItems++; } }
-        return currentItems<tab.length;
-    }
-
-    public boolean contains(Card[] tab, Card c){ // boolean true si la hand ou le bench possède la carte passée en param
-        boolean check=false;
-        for (int i=0;i<tab.length;i++) {
-            if(tab[i]==c){ check=true; }
-        }
-        return check;
-    }
-
-    public void removeCard(Card[] tab, Card c){ // supprime une carte du bench ou de la hand
-        for (int i = 0; i < tab.length; i++) {
-            if (tab[i] == c) { tab[i] = null; }
-        }
-    }
-
-    public void addCardToHand(Card c){ // ajoute une carte à la main dans le premier slot vide
-        if (hasSlot(this.hand)) {
-            for (int i=0;i<MAX_CARD_HAND;i++) {
-                if (this.hand[i]==null){
-                    this.hand[i]=c;
-                    c.setZone(Card.Zone.HAND);
-                    break;
-                }
-            }
-        } else { errorEvent(); }
-    }
-
-    public void removeCardFromHand(Card c){ // supprime une carte de la main - avec checkout et error exit
-        if (contains(this.hand,c)){ removeCard(this.hand,c); }
-        else {
+        } else {
             errorEvent();
         }
     }
 
-    public void addCardToBench(Card c){ // ajoute une carte au bench
+    public void removeActiveCard() {
+        this.activeCard = null;
+    }
+
+    public boolean hasSlot(Card[] tab) {
+        int currentItems = 0;
+        for (Card c : tab) {
+            if (c != null) {
+                currentItems++;
+            }
+        }
+        return currentItems < tab.length;
+    }
+
+    public boolean contains(Card[] tab, Card c) {
+        for (int i = 0; i < tab.length; i++) {
+            if (tab[i] == c) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public void removeCard(Card[] tab, Card c) {
+        for (int i = 0; i < tab.length; i++) {
+            if (tab[i] == c) {
+                tab[i] = null;
+            }
+        }
+    }
+
+    public void addCardToHand(Card c) {
+        if (hasSlot(this.hand)) {
+            for (int i = 0; i < MAX_CARD_HAND; i++) {
+                if (this.hand[i] == null) {
+                    this.hand[i] = c;
+                    c.setZone(Card.Zone.HAND);
+                    break;
+                }
+            }
+        } else {
+            errorEvent();
+        }
+    }
+
+    public void removeCardFromHand(Card c) {
+        if (contains(this.hand, c)) {
+            removeCard(this.hand, c);
+        } else {
+            errorEvent();
+        }
+    }
+
+    public void addCardToBench(Card c) {
         if (hasSlot(this.bench)) {
             for (int i = 0; i < MAX_CARD_BENCH; i++) {
                 if (this.bench[i] == null) {
@@ -126,55 +149,68 @@ public class Player {
                     break;
                 }
             }
-        } else { errorEvent(); }
+        } else {
+            errorEvent();
+        }
     }
 
     public void cardHandToBench(Card c) {
         System.out.println("🔍 cardHandToBench appelé avec : " + c);
         System.out.println("🔍 hasSlot(bench) = " + hasSlot(this.bench));
 
-        if (hasSlot(this.bench) && c!=null && c.getZone().equals(Card.Zone.HAND) && c.getCost()<=this.piece) {
+        // FIX: vérifier enoughPiece au lieu de enoughMana
+        if (hasSlot(this.bench) && c != null && c.getZone().equals(Card.Zone.HAND) && enoughPiece(c.getCost())) {
             System.out.println("✅ Slot disponible, ajout au bench...");
             addCardToBench(c);
             System.out.println("✅ Carte ajoutée au bench");
             removeCardFromHand(c);
             System.out.println("✅ Carte retirée de la main");
-            this.piece-=c.getCost();
-            System.out.println("✅ Retrait de pièces : ("+this.piece+")");
+            costPiece(c.getCost());
+            System.out.println("✅ Retrait de pièces : (" + this.piece + ")");
         } else {
             errorEvent();
         }
-
     }
 
-    public void removeCardFromBench(Card c){ // supprime une carte du bench
-        if (contains(this.bench,c)){ removeCard(this.bench,c); }
-        else { errorEvent(); }
+    public void removeCardFromBench(Card c) {
+        if (contains(this.bench, c)) {
+            removeCard(this.bench, c);
+        } else {
+            errorEvent();
+        }
     }
 
-    public void errorEvent(){ // error exit - a update
+    public void errorEvent() {
         System.out.println("[Debug] - Vous ne pouvez pas faire ça !");
     }
 
-    public Card[] getHand() { return this.hand; }
-    public Card[] getBench() { return this.bench; }
+    public Card[] getHand() {
+        return this.hand;
+    }
 
-    public int getHp(){ return this.crystal.currentHp; }
+    public Card[] getBench() {
+        return this.bench;
+    }
 
-    public void takeDamage(int dmg){
-        this.crystal.currentHp=max(0,this.crystal.currentHp-dmg);
+    public int getHp() {
+        return this.crystal.currentHp;
+    }
+
+    public void takeDamage(int dmg) {
+        this.crystal.currentHp = max(0, this.crystal.currentHp - dmg);
         this.crystal.updateTexture();
-
-        checkDeath(); // faire un truc avec quand on fera le gestion des morts
+        checkVictory(); // ← Vérifier automatiquement
     }
 
-    public boolean checkDeath(){
-        return this.crystal.currentHp==0;
+    public boolean checkDeath() {
+        return this.crystal.currentHp == 0;
     }
 
-    public void checkVictory(){
-        if (checkDeath()){
-            this.win=true;
+    public void checkVictory() {
+        if (checkDeath()) {
+            WIN = true;
+            WINNER_ID = (this.idPlayer == 1) ? 2 : 1; // L'adversaire gagne
+            System.out.println("💀 Joueur " + this.idPlayer + " mort ! Joueur " + WINNER_ID + " gagne !");
         }
     }
 }

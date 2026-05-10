@@ -16,6 +16,7 @@ public class MenuManager {
     private SettingsMenu settingsMenu;
     private QuitMenu quitMenu;
     private GameMenu gameMenu;
+    private WinMenu winMenu;
 
     public MenuManager(){}
 
@@ -47,6 +48,7 @@ public class MenuManager {
         settingsMenu = new SettingsMenu(controller);
         quitMenu = new QuitMenu(controller);
         gameMenu = new GameMenu(controller);
+        winMenu = new WinMenu(controller);
     }
 
     public void changeMenu(Menu.TypeMenu typeMenu) {
@@ -66,6 +68,8 @@ public class MenuManager {
             case QUIT -> actualMenu = quitMenu;
 
             case GAME -> actualMenu = gameMenu;
+
+            case WIN -> actualMenu = winMenu;
         }
         if (actualMenu != null) {
             Gdx.input.setInputProcessor(actualMenu.getStage());

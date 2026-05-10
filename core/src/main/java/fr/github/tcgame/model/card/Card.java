@@ -61,4 +61,7 @@ public class Card {
 
     public int getCost(){ return this.cost; }
 
+    public int getNormalAtk() { return this.normalAtk; }
+    public int getSpecialAtk() { return this.specialAtk; }
+    public int getManaCost() { return this.mana; }
 }

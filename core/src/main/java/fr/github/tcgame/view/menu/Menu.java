@@ -59,7 +59,7 @@ public abstract class Menu {
     protected float libraryGapY;
     protected int libraryCardsPerRow;
 
-    public enum TypeMenu {SPLASH, MAIN, SELECTION, CARDLIST, SETTINGS, QUIT, GAME}
+    public enum TypeMenu {SPLASH, MAIN, SELECTION, CARDLIST, SETTINGS, QUIT, GAME, WIN}
     public TypeMenu typeMenu;
 
     public Menu(TypeMenu typeMenu, MenuController controller) {
@@ -104,7 +104,6 @@ public abstract class Menu {
             texture.dispose();
         }
         loadedTextures.clear();
-        //
         stage.dispose();
         this.skin.dispose();
         if (mainTitleTexture != null) {
@@ -135,7 +134,12 @@ public abstract class Menu {
         TOGGLE      // Toggle entre les deux textures à chaque clic
     }
 
+
     public void addButton(String texturePath, String textureAlt, float x, float y, float size, Runnable action, ButtonMode mode) {
+        addButton(texturePath, textureAlt, x, y, size, action, mode, "sfx/placeholder_button.mp3"); //placeholder
+    }
+
+    public void addButton(String texturePath, String textureAlt, float x, float y, float size, Runnable action, ButtonMode mode, String sfxPath) {
         Texture normalTex = new Texture(Gdx.files.internal(texturePath));
         Texture altTex = new Texture(Gdx.files.internal(textureAlt));
 
@@ -155,7 +159,7 @@ public abstract class Menu {
         button.setPosition(x, y);
         button.setSize(normalTex.getWidth() * size, normalTex.getHeight() * size);
 
-        com.badlogic.gdx.audio.Sound sfx = Gdx.audio.newSound(Gdx.files.internal("sfx/placeholder_button.mp3"));
+        com.badlogic.gdx.audio.Sound sfx = Gdx.audio.newSound(Gdx.files.internal(sfxPath));
 
         if (mode == ButtonMode.TOGGLE) {
             // État de toggle

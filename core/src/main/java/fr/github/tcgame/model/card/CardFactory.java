@@ -11,7 +11,7 @@ public class CardFactory {
     public static List<Card> createAllCards() {
         List<Card> cards = new ArrayList<>();
         for (int i=0; i<40;i++) {
-            Card c = new Card("Verstappen", Card.Family.PRODIGE, 12, 3, 3, 8, 3, "cards/prodiges/verstappen.png");
+            Card c = new Card("Verstappen", Card.Family.PRODIGE, 12, 3, 10, 8, 3, "cards/prodiges/verstappen.png");
             cards.add(c);
         }
         Collections.shuffle(cards);
