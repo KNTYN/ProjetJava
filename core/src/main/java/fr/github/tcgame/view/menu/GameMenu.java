@@ -1,15 +1,23 @@
 package fr.github.tcgame.view.menu;
 
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
+import com.badlogic.gdx.graphics.g2d.TextureRegion;
+import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.Group;
 import com.badlogic.gdx.scenes.scene2d.ui.Image;
 import com.badlogic.gdx.scenes.scene2d.ui.Label;
+import com.badlogic.gdx.scenes.scene2d.ui.Slider;
 import com.badlogic.gdx.scenes.scene2d.ui.Table;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
+import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import fr.github.tcgame.control.MenuController;
 
 import static fr.github.tcgame.model.GameModel.*;
 import static fr.github.tcgame.model.player.Player.WIN;
+import static fr.github.tcgame.view.MainGame.AUDIOSETTINGS;
 import static fr.github.tcgame.view.MainGame.CARDV;
 
 public class GameMenu extends Menu {
@@ -31,6 +39,12 @@ public class GameMenu extends Menu {
     // =========================
     private Label turnLabel;
 
+    // =========================
+    // PAUSE
+    // =========================
+    private boolean paused = false;
+    private Group pauseOverlay;
+
     public GameMenu(MenuController controller) {
         super(TypeMenu.GAME, controller);
     }
@@ -44,7 +58,7 @@ public class GameMenu extends Menu {
         // BOUTON BENCH
         // =========================
         addButton("background/bench.png", "background/bench.png", 300, 300, 1f, () -> {
-            if (playerTurn == 1)
+            if (!paused && playerTurn == 1)
                 controller.moveCardToBench(1);
         });
 
@@ -52,7 +66,7 @@ public class GameMenu extends Menu {
         // BOUTON DEPLOY ACTIVE
         // =========================
         addButton("background/card_back.png", "background/card_back.png", 900, 300, 1f, () -> {
-            if (playerTurn == 1)
+            if (!paused && playerTurn == 1)
                 controller.deployToActive(1);
         });
 
@@ -60,7 +74,7 @@ public class GameMenu extends Menu {
         // BOUTON ATTAQUE
         // =========================
         addButton("button/attaque.png", "button/attaque_pressed.png", 1200, 300, 1f, () -> {
-            if (playerTurn == 1)
+            if (!paused && playerTurn == 1)
                 controller.attack(1);
         }, ButtonMode.PRESSED);
 
@@ -68,7 +82,7 @@ public class GameMenu extends Menu {
         // BOUTON SPECIALE
         // =========================
         addButton("button/speciale.png", "button/speciale_pressed.png", 1200, 250, 1f, () -> {
-            if (playerTurn == 1)
+            if (!paused && playerTurn == 1)
                 controller.attackSpecial(1);
         }, ButtonMode.PRESSED);
 
@@ -76,7 +90,7 @@ public class GameMenu extends Menu {
         // BOUTON PASSER
         // =========================
         addButton("button/passer.png", "button/passer_pressed.png", 1200, 200, 1f, () -> {
-            if (playerTurn == 1)
+            if (!paused && playerTurn == 1)
                 controller.passed();
         }, ButtonMode.PRESSED);
 
@@ -90,11 +104,20 @@ public class GameMenu extends Menu {
         CARDV.setStage(stage);
 
         // =========================
-        // DEBUG BOT SKIP
+        // PAUSE OVERLAY
+        // =========================
+        buildPauseOverlay();
+
+        // =========================
+        // ESCAPE = PAUSE
         // =========================
         keyIsPressed(Input.Keys.ESCAPE, () -> {
-            System.out.println("Debug Touch");
-            controller.debug();
+
+            paused = !paused;
+
+            pauseOverlay.setVisible(paused);
+
+            System.out.println(paused ? "⏸️ Pause" : "▶️ Reprise");
         });
     }
 
@@ -110,7 +133,7 @@ public class GameMenu extends Menu {
         Texture coinTexture = new Texture("items/coin.png");
 
         // =========================
-        // PLAYER 1 (BOTTOM LEFT)
+        // PLAYER 1
         // =========================
         Table coinTableP1 = new Table();
         coinTableP1.setPosition(50, 200);
@@ -126,7 +149,7 @@ public class GameMenu extends Menu {
         stage.addActor(coinTableP1);
 
         // =========================
-        // PLAYER 2 (TOP RIGHT)
+        // PLAYER 2
         // =========================
         Table coinTableP2 = new Table();
         coinTableP2.setPosition(WIDTH - 220, HEIGHT - 80);
@@ -154,7 +177,7 @@ public class GameMenu extends Menu {
         Texture manaTexture = new Texture("items/mana.png");
 
         // =========================
-        // PLAYER 1 (BOTTOM LEFT)
+        // PLAYER 1
         // =========================
         Table manaTableP1 = new Table();
         manaTableP1.setPosition(50, 140);
@@ -170,7 +193,7 @@ public class GameMenu extends Menu {
         stage.addActor(manaTableP1);
 
         // =========================
-        // PLAYER 2 (TOP RIGHT)
+        // PLAYER 2
         // =========================
         Table manaTableP2 = new Table();
         manaTableP2.setPosition(WIDTH - 220, HEIGHT - 140);
@@ -203,10 +226,119 @@ public class GameMenu extends Menu {
     }
 
     // =========================================================
+    // PAUSE OVERLAY
+    // =========================================================
+    private void buildPauseOverlay() {
+
+        pauseOverlay = new Group();
+
+        // =========================
+        // DARK BACKGROUND
+        // =========================
+        Image darkBg = new Image(
+            skin.newDrawable(
+                "white",
+                new Color(0, 0, 0, 0.7f)
+            )
+        );
+
+        darkBg.setSize(WIDTH, HEIGHT);
+
+        pauseOverlay.addActor(darkBg);
+
+        // =========================
+        // TITLE
+        // =========================
+        Label.LabelStyle style = new Label.LabelStyle();
+        style.font = new BitmapFont();
+        style.font.getData().setScale(3f);
+
+        Label pauseLabel = new Label("PAUSE", style);
+
+        pauseLabel.setPosition(WIDTH / 2f - 100, HEIGHT - 250);
+
+        pauseOverlay.addActor(pauseLabel);
+
+        // =========================
+        // SLIDERS
+        // =========================
+        addPauseSlider(
+            WIDTH / 2f - 200,
+            590,
+            AUDIOSETTINGS.getGlobalVolume(),
+            value -> AUDIOSETTINGS.setGlobalVolume(value)
+        );
+
+        addPauseSlider(
+            WIDTH / 2f - 200,
+            425,
+            AUDIOSETTINGS.getMusicVolume(),
+            value -> AUDIOSETTINGS.setMusicVolume(value)
+        );
+
+        addPauseSlider(
+            WIDTH / 2f - 200,
+            270,
+            AUDIOSETTINGS.getSfxVolume(),
+            value -> AUDIOSETTINGS.setSfxVolume(value)
+        );
+
+        pauseOverlay.setVisible(false);
+
+        stage.addActor(pauseOverlay);
+    }
+
+    // =========================================================
+    // PAUSE SLIDER
+    // =========================================================
+    private void addPauseSlider(float x,
+                                float y,
+                                float initialValue,
+                                java.util.function.Consumer<Float> onChange) {
+
+        Slider.SliderStyle style = new Slider.SliderStyle();
+
+        Texture slice = new Texture("slider/bar_slider.png");
+        Texture point = new Texture("slider/point_slider.png");
+
+        style.background =
+            new TextureRegionDrawable(new TextureRegion(slice));
+
+        style.knob =
+            new TextureRegionDrawable(new TextureRegion(point));
+
+        Slider slider = new Slider(0f, 1f, 0.01f, false, style);
+
+        slider.setPosition(x, y);
+        slider.setSize(400, 20);
+
+        slider.setValue(initialValue);
+
+        slider.addListener(new ChangeListener() {
+
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                onChange.accept(slider.getValue());
+            }
+        });
+
+        pauseOverlay.addActor(slider);
+    }
+
+    // =========================================================
     // DRAW
     // =========================================================
     @Override
     public void draw() {
+
+        // =========================
+        // PAUSE
+        // =========================
+        if (paused) {
+            stage.act();
+            stage.draw();
+            return;
+        }
 
         // =========================
         // PLAYER 1

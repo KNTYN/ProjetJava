@@ -13,7 +13,7 @@ public class PauseMenu extends Menu{
 
     @Override
     protected void build() {
-        setBackground("background/BG_settings.png");
+        //setbackground opacité
 
         addButton("button/arrow_return.png", "button/arrow_return_gold.png", 50, 890    , 1.5f, controller::goMain);
 
@@ -21,6 +21,6 @@ public class PauseMenu extends Menu{
         addSlider(WIDTH/2 - 200, 425, 400, AUDIOSETTINGS.getMusicVolume(),value -> AUDIOSETTINGS.setMusicVolume(value)); // music
         addSlider(WIDTH/2 - 200, 270, 400, AUDIOSETTINGS.getSfxVolume(),value -> AUDIOSETTINGS.setSfxVolume(value)); // sfx
 
-        keyIsPressed(Input.Keys.ESCAPE, controller::goMain);
+       // keyIsPressed(Input.Keys.ESCAPE, controller::goMain);
     }
 }
