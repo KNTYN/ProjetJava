@@ -14,11 +14,11 @@ public class SettingsMenu extends Menu{
     protected void build() {
         setBackground("background/BG_settings.png");
 
-        addButton("button/arrow_return.png", "button/arrow_return_gold.png", 50, 650, 1.5f, controller::goMain);
+        addButton("button/arrow_return.png", "button/arrow_return_gold.png", 50, 890    , 1.5f, controller::goMain);
 
-        addSlider(300, 500, 400, AUDIOSETTINGS.getGlobalVolume(),value -> AUDIOSETTINGS.setGlobalVolume(value)); // global
-        addSlider(300, 400, 400, AUDIOSETTINGS.getMusicVolume(),value -> AUDIOSETTINGS.setMusicVolume(value)); // music
-        addSlider(300, 300, 400, AUDIOSETTINGS.getSfxVolume(),value -> AUDIOSETTINGS.setSfxVolume(value)); // sfx
+        addSlider(WIDTH/2 - 200, 590, 400, AUDIOSETTINGS.getGlobalVolume(),value -> AUDIOSETTINGS.setGlobalVolume(value)); // global
+        addSlider(WIDTH/2 - 200, 425, 400, AUDIOSETTINGS.getMusicVolume(),value -> AUDIOSETTINGS.setMusicVolume(value)); // music
+        addSlider(WIDTH/2 - 200, 270, 400, AUDIOSETTINGS.getSfxVolume(),value -> AUDIOSETTINGS.setSfxVolume(value)); // sfx
 
         keyIsPressed(Input.Keys.ESCAPE, controller::goMain);
     }
