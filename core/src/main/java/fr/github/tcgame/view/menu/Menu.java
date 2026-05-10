@@ -133,8 +133,8 @@ public abstract class Menu {
     }
 
 
-    public void addButton(String texturePath, String textureAlt, float x, float y, float size, Runnable action, ButtonMode mode) {
-        addButton(texturePath, textureAlt, x, y, size, action, mode, "sfx/placeholder_button.mp3"); //placeholder
+    public void addButton(String texturePath, String textureAlt, float x, float y, float size, Runnable action,String sfxPath) {
+        addButton(texturePath, textureAlt, x, y, size, action, ButtonMode.HOVER, sfxPath); //placeholder
     }
 
     public void addButton(String texturePath, String textureAlt, float x, float y, float size, Runnable action, ButtonMode mode, String sfxPath) {
@@ -196,7 +196,8 @@ public abstract class Menu {
 
     // Versions simplifiées
     public void addButton(String texturePath, String textureAlt, float x, float y, float size, Runnable action) {
-        addButton(texturePath, textureAlt, x, y, size, action, ButtonMode.HOVER);
+        addButton(texturePath, textureAlt, x, y, size, action, ButtonMode.HOVER, "sfx/placeholder_button.mp3"); //placeholder
+
     }
 
 
