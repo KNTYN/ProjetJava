@@ -20,6 +20,11 @@ public class GameMenu extends Menu{
             controller.moveCardToBench(1);
         });
 
+        addButton("background/card_back.png", "background/card_back.png", 900, 300, 1f,() -> {
+            controller.deployToActive(1);
+
+        });
+
         CARDV.setStage(stage);
 
         keyIsPressed(Input.Keys.ESCAPE, () -> {

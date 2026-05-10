@@ -49,12 +49,8 @@ public class GameModel {
     // INITIALISATION
     public void init() {
         this.deck.createDeck();
-        this.deck.draws(P1,3);
+        this.deck.draws(P1,5);
         System.out.println("P1 HAND : " + Arrays.toString(P1.getHand()));
-        HANDV1.displayHand(1);
-        // afficher LA CARTE via DECK
-
-        P1.cardHandToBench(P1.getHand()[2]);
         HANDV1.displayHand(1);
     }
 

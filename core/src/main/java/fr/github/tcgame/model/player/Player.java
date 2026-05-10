@@ -1,6 +1,8 @@
 package fr.github.tcgame.model.player;
 
 import fr.github.tcgame.model.card.Card;
+import fr.github.tcgame.view.card.ActiveView;
+import fr.github.tcgame.view.card.BenchView;
 import fr.github.tcgame.view.card.HandView;
 
 import java.util.List;
@@ -13,7 +15,13 @@ public class Player {
     private Crystal crystal;
 
     public static HandView HANDV1 = new HandView();
+    public static BenchView BENCHV1 = new BenchView();
+
     public static HandView HANDV2 = new HandView();
+    public static BenchView BENCHV2 = new BenchView();
+
+    public static ActiveView ACTIVEV1 = new ActiveView();
+    public static ActiveView ACTIVEV2 = new ActiveView();
 
     public Card[] hand = new Card[MAX_CARD_HAND];
     public Card[] bench = new Card[MAX_CARD_BENCH];
@@ -21,8 +29,31 @@ public class Player {
 
     public Card selectedCard;
 
+    public int mana=3;
+    public int piece=6;
+
     public Player(int idP){
         this.crystal=new Crystal(idP);
+    }
+
+
+    public boolean enoughMana(int mana) {
+        return this.mana>=mana;
+    }
+    public void addMana(int mana) {
+        this.mana+=mana;
+    }
+    public void costMana(int mana) {
+        this.mana-=mana;
+    }
+    public boolean enoughPiece(int piece) {
+        return this.piece>=piece;
+    }
+    public void addPiece(int piece) {
+        this.piece+=piece;
+    }
+    public void costPiece(int piece) {
+        this.piece-=piece;
     }
 
     public Card getSelectedCard() { return selectedCard; } // derniere carte selectionnée
@@ -31,9 +62,10 @@ public class Player {
     public Card getActiveCard() { return activeCard; } // getter activeCard
 
     public void deployActiveCard(Card c){ // deployer une carte sur le slot actif
-        if (this.activeCard==null){
+        if (this.activeCard==null && c.getZone().equals(Card.Zone.BENCH)){
             this.activeCard=c;
             removeCardFromBench(c);
+            c.setZone(Card.Zone.ACTIVE);
         }
         else { errorEvent(); }
     }
@@ -42,6 +74,7 @@ public class Player {
 
     public boolean hasSlot(Card[] tab){ // s'il y a un slot pour une nouvelle carte dans la hand ou bench
         int currentItems=0;
+
         for (Card c : tab) { if (c != null) { currentItems++; } }
         return currentItems<tab.length;
     }
@@ -65,6 +98,7 @@ public class Player {
             for (int i=0;i<MAX_CARD_HAND;i++) {
                 if (this.hand[i]==null){
                     this.hand[i]=c;
+                    c.setZone(Card.Zone.HAND);
                     break;
                 }
             }
@@ -83,18 +117,28 @@ public class Player {
             for (int i = 0; i < MAX_CARD_BENCH; i++) {
                 if (this.bench[i] == null) {
                     this.bench[i] = c;
+                    c.setZone(Card.Zone.BENCH);
                     break;
                 }
             }
         } else { errorEvent(); }
     }
 
-    public void cardHandToBench(Card c){ // deplace une carte de la hand vers le bench - avec checkout et error exit
-        if (hasSlot(this.bench)){
+    public void cardHandToBench(Card c) {
+        System.out.println("🔍 cardHandToBench appelé avec : " + c);
+        System.out.println("🔍 hasSlot(bench) = " + hasSlot(this.bench));
+
+        if (hasSlot(this.bench) && c!=null && c.getZone().equals(Card.Zone.HAND)) {
+            System.out.println("✅ Slot disponible, ajout au bench...");
             addCardToBench(c);
+            System.out.println("✅ Carte ajoutée au bench");
             removeCardFromHand(c);
+            System.out.println("✅ Carte retirée de la main");
+            System.out.println("dd");
+        } else {
+            errorEvent();
         }
-        else { errorEvent(); }
+
     }
 
     public void removeCardFromBench(Card c){ // supprime une carte du bench
