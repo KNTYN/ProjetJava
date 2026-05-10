@@ -21,7 +21,7 @@ public class Card {
 
     private Texture cardTexture; // on initie la texture dans le constructeur directement puis il sera récupérer dans le CardView
 
-    public enum Zone { OFF, HAND, BENCH, ACTIVE}
+    public enum Zone { OFFF, HAND, BENCH, ACTIVE}
 
     private Zone zone;
 
@@ -41,7 +41,7 @@ public class Card {
 
         this.cardTexture=new Texture((Gdx.files.internal(pathCardTexture)));
 
-        this.zone=Zone.OFF;
+        this.zone=Zone.OFFF;
     }
 
 
