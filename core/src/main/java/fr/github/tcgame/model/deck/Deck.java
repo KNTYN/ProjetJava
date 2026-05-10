@@ -1,56 +1,35 @@
 package fr.github.tcgame.model.deck;
 
 import fr.github.tcgame.model.card.Card;
+import fr.github.tcgame.model.player.Player;
 
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Deque;
 import java.util.List;
 
-/**
- * Pioche commune aux deux joueurs.
- * Fonctionne comme une file FIFO :
- *   - on pioche par le debut
- *   - les cartes mortes retournent en fin de file
- */
+import static fr.github.tcgame.model.card.CardFactory.createAllCards;
+import static fr.github.tcgame.view.MainGame.CARDV;
+import static fr.github.tcgame.view.MainGame.GM;
 
 public class Deck {
+    private List<Card> deck;
 
-    public static final int TOTAL_CARDS = 60;
-
-    private final Deque<Card> cards;
-
-    public Deck(){
-        this.cards=new ArrayDeque<>();
+    public void createDeck(){ // créer un deck
+        deck=createAllCards();
     }
 
-    //Ajoute carte en fin de pioche (init)
-    public void addCard(Card card){
-        cards.addLast(card);
+    public List<Card> getDeck(){ // getter
+        return this.deck;
     }
 
-    //Pioche la premiere carte
-    public Card draw(){
-        return cards.pollFirst();
+    public void draws(Player p, int nmb) { // pioche nmb carte(s) pour la main du joueur p
+        for (int i = 0; i < nmb; i++) {
+            Card c = deck.remove(0);
+            p.addCardToHand(c);
+            deck.add(deck.size()-1,c); // on remet la carte à la fin du deck pour avoir un "deck infini"
+
+            //CARDV.displayCard(c, p == GM.P1 ? 1 : 2, 500, 400, 150, 210);
+        }
+        // FAUT AFFICHER LA CARTE AVEC CARDVIEW
     }
 
-    public void putBack(Card card) {
-        cards.addLast(card);
-    }
 
-    public void shuffle(){
-        List<Card> list = new ArrayList<>(cards);
-        Collections.shuffle(list);
-        cards.clear();
-        cards.addAll(list);
-    }
-
-    public boolean isEmpty() { return cards.isEmpty(); }
-    public int size()        { return cards.size(); }
-
-    @Override
-    public String toString() {
-        return String.format("Pioche [%d cartes restantes]", cards.size());
-    }
 }

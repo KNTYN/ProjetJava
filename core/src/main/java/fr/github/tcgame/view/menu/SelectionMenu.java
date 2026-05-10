@@ -11,7 +11,7 @@ public class SelectionMenu extends Menu{
     @Override
     protected void build() {
         setBackground("background/BG_MainMenu.png");
-        addMainTitle();
+        // addMainTitle();
 
         addButton("button/button_0012_SOLO.png","button/button_0009_SOLO2.png", 450, 300, 1.5f, controller::startGame); // solo
         addButton("button/button_0011_LOCAL.png","button/button_0010_LOCAL2.png", 450, 200, 1.5f, controller::goMain); // local

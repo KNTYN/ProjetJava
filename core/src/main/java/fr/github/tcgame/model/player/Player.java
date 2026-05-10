@@ -1,159 +1,124 @@
 package fr.github.tcgame.model.player;
 
 import fr.github.tcgame.model.card.Card;
+import fr.github.tcgame.view.card.HandView;
 
-import java.util.ArrayList;
 import java.util.List;
 
+import static fr.github.tcgame.model.GameModel.MAX_CARD_BENCH;
+import static fr.github.tcgame.model.GameModel.MAX_CARD_HAND;
+import static java.lang.Math.max;
+
 public class Player {
+    private Crystal crystal;
 
-    public static final int MAX_BENCH_SIZE = 3;
-    public static final int MAX_MANA       = 10;
-    public static final int SWAP_COINS_COST = 2; // cout en coins pour echanger la carte en jeu
+    public static HandView HANDV1 = new HandView();
+    public static HandView HANDV2 = new HandView();
 
-    private final String name;
-    private final Crystal crystal;
+    public Card[] hand = new Card[MAX_CARD_HAND];
+    public Card[] bench = new Card[MAX_CARD_BENCH];
+    public Card activeCard;
 
-    private final List<Card> hand;
-    private final List<Card> bench;
-    private Card activeCard;
+    public Card selectedCard;
 
-    //Monnaies
-    private int mana;
-    private int coins;
-
-    //Effets temporaires sur le joueur
-    private boolean cannotDraw;      // ne peut pas piocher au prochain tour (Panzoli passif)
-    private int reducedDeployCost;   // reduction du prochain deploiement (Actionnaire)
-
-    public Player(String name){
-        this.name = name;
-        this.crystal = new Crystal();
-        this.hand = new ArrayList<>();
-        this.bench = new ArrayList<>();
-        this.activeCard = null;
-        this.mana = 0;
-        this.coins = 0;
-        this.cannotDraw = false;
-        this.reducedDeployCost = 0;
+    public Player(int idP){
+        this.crystal=new Crystal(idP);
     }
 
-    //Methodes Main
+    public Card getSelectedCard() { return selectedCard; } // derniere carte selectionnée
+    public void resetSelectionCard(){ this.selectedCard=null; } // reset la selection de carte
 
-    public void addtoHand(Card card){
-        hand.add(card);
+    public Card getActiveCard() { return activeCard; } // getter activeCard
+
+    public void deployActiveCard(Card c){ // deployer une carte sur le slot actif
+        if (this.activeCard==null){
+            this.activeCard=c;
+            removeCardFromBench(c);
+        }
+        else { errorEvent(); }
     }
 
-    public boolean removeFromHand(Card card){
-        return hand.remove(card);
+    public void removeActiveCard(){this.activeCard=null; } // remove l'active card
+
+    public boolean hasSlot(Card[] tab){ // s'il y a un slot pour une nouvelle carte dans la hand ou bench
+        int currentItems=0;
+        for (Card c : tab) { if (c != null) { currentItems++; } }
+        return currentItems<tab.length;
     }
 
-    //Methodes Banc
-
-    //Transition Main->Banc (coute des pièces)
-    public boolean deployToBench(Card card){
-        if (bench.size()>=MAX_BENCH_SIZE) return false;
-
-        int cost = Math.max(0,card.getCost()-reducedDeployCost);
-        if (coins<cost) return false;
-
-        coins -= cost;
-        reducedDeployCost=0;
-        hand.remove(card);
-        bench.add(card);
-        return true;
+    public boolean contains(Card[] tab, Card c){ // boolean true si la hand ou le bench possède la carte passée en param
+        boolean check=false;
+        for (int i=0;i<tab.length;i++) {
+            if(tab[i]==c){ check=true; }
+        }
+        return check;
     }
 
-    public boolean removeFromBench(Card card){
-        return bench.remove(card);
+    public void removeCard(Card[] tab, Card c){ // supprime une carte du bench ou de la hand
+        for (int i = 0; i < tab.length; i++) {
+            if (tab[i] == c) { tab[i] = null; }
+        }
     }
 
-    //Methodes de la carte en jeu
-
-    //Transition Banc->En jeu (gratuit si aucune carte active)
-    public boolean playFromBenchFree(Card card){
-        if (!bench.contains(card)) return false;
-        bench.remove(card);
-        activeCard = card;
-        return true;
+    public void addCardToHand(Card c){ // ajoute une carte à la main dans le premier slot vide
+        if (hasSlot(this.hand)) {
+            for (int i=0;i<MAX_CARD_HAND;i++) {
+                if (this.hand[i]==null){
+                    this.hand[i]=c;
+                    break;
+                }
+            }
+        } else { errorEvent(); }
     }
 
-    //Echange la carte en jeu avec une carte du banc (coute des coins)
-    public boolean swapActiveCard(Card card){
-        if (!bench.contains(card)) return false;
-        if (coins<SWAP_COINS_COST) return false;
-
-        coins -= SWAP_COINS_COST;
-        bench.add(activeCard);
-        bench.remove(card);
-        activeCard=card;
-        return true;
+    public void removeCardFromHand(Card c){ // supprime une carte de la main - avec checkout et error exit
+        if (contains(this.hand,c)){ removeCard(this.hand,c); }
+        else {
+            errorEvent();
+        }
     }
 
-    // Setter activeCard (utilise par GameModel pour remettre a null apres mort)
-    public void setActiveCard(Card card) { this.activeCard = card; }
-
-    //Methodes Mana
-
-    public void gainMana(int amount){
-        mana = Math.min(MAX_MANA, mana+amount);
+    public void addCardToBench(Card c){ // ajoute une carte au bench
+        if (hasSlot(this.bench)) {
+            for (int i = 0; i < MAX_CARD_BENCH; i++) {
+                if (this.bench[i] == null) {
+                    this.bench[i] = c;
+                    break;
+                }
+            }
+        } else { errorEvent(); }
     }
 
-    public boolean spendMana(int amount){
-        if (mana<amount) return false;
-        mana -= amount;
-        return true;
+    public void cardHandToBench(Card c){ // deplace une carte de la hand vers le bench - avec checkout et error exit
+        if (hasSlot(this.bench)){
+            addCardToBench(c);
+            removeCardFromHand(c);
+        }
+        else { errorEvent(); }
     }
 
-    public void halveMana() {
-        mana = mana / 2;
+    public void removeCardFromBench(Card c){ // supprime une carte du bench
+        if (contains(this.bench,c)){ removeCard(this.bench,c); }
+        else { errorEvent(); }
     }
 
-    //Methodes Coins
-
-    public void gainCoins(int amount){
-        coins += amount;
+    public void errorEvent(){ // error exit - a update
+        System.out.println("[Debug] - Vous ne pouvez pas faire ça !");
     }
 
-    public boolean spendCoins(int amount){
-        if(coins < amount) return false;
-        coins -= amount;
-        return true;
+    public Card[] getHand() { return this.hand; }
+    public Card[] getBench() { return this.bench; }
+
+    public int getHp(){ return this.crystal.currentHp; }
+
+    public void takeDamage(int dmg){
+        this.crystal.currentHp=max(0,this.crystal.currentHp-dmg);
+        this.crystal.updateTexture();
+
+        checkDeath(); // faire un truc avec quand on fera le gestion des morts
     }
 
-    public void loseHalfCoins(){
-        coins = coins / 2;
+    public boolean checkDeath(){
+        return this.crystal.currentHp==0;
     }
-
-    //Shuffle
-    public void clearAll() {
-        hand.clear();
-        bench.clear();
-        activeCard = null;
-    }
-
-    //Methodes des effets temporaires
-    public void setCannotDraw(boolean value)        { this.cannotDraw = value; }
-    public boolean cannotDraw()                     { return cannotDraw; }
-
-    public void applyReduceDeployCost(int reduction){ this.reducedDeployCost = reduction; }
-
-    // --- Getters ---
-
-    public String getName()        { return name; }
-    public Crystal getCrystal()    { return crystal; }
-    public List<Card> getHand()    { return hand; }
-    public List<Card> getBench()   { return bench; }
-    public Card getActiveCard()    { return activeCard; }
-    public boolean hasActiveCard() { return activeCard != null; }
-    public int getMana()           { return mana; }
-    public int getCoins()          { return coins; }
-
-    @Override
-    public String toString() {
-        return String.format("%s | %s | Mana:%d/%d | Pieces:%d | Banc:%d | Main:%d cartes",
-            name, crystal, mana, MAX_MANA, coins, bench.size(), hand.size());
-    }
-
-
 }

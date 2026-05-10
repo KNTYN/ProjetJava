@@ -10,7 +10,7 @@ public class SplashMenu extends Menu{
     @Override
     protected void build() {
         setBackground("background/BG_splashMenu.png");
-        addMainTitle();
+        //addMainTitle();
 
         addSplash(controller::goMain);
     }

@@ -97,42 +97,6 @@ public abstract class Menu {
         stage.addActor(mainTitle);
     }
 
-    /*
-    public void addButton(String texturePath, String texturePathHover, float x, float y, float size, Runnable action) {
-        Texture texture = new Texture(Gdx.files.internal(texturePath));
-        ImageButton button = new ImageButton(new TextureRegionDrawable(texture));
-
-        button.setPosition(x,y);
-        button.setSize(texture.getWidth()*size,texture.getHeight()*size);
-
-        com.badlogic.gdx.audio.Sound sfx = Gdx.audio.newSound(Gdx.files.internal("sfx/placeholder_button.mp3"));
-
-        button.addListener(new ClickListener() {
-            @Override
-            public void clicked(InputEvent event, float x, float y) {
-                if (action != null) {
-                    sfx.play(AUDIOSETTINGS.getSfxVolume());
-                    action.run();
-                }
-            }
-        });
-
-        button.addListener(new InputListener() {
-            @Override
-            public void enter(InputEvent event, float x, float y, int pointer, Actor fromActor) {
-                System.out.println("hover ON");
-            }
-
-            @Override
-            public void exit(InputEvent event, float x, float y, int pointer, Actor toActor) {
-                System.out.println("hover OFF");
-            }
-        });
-
-        stage.addActor(button);
-    }
-
-     */
     public void addButton(String texturePath, String texturePathHover,
                           float x, float y, float size, Runnable action) {
 
@@ -157,10 +121,10 @@ public abstract class Menu {
         button.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                if (action != null) {
-                    sfx.play(AUDIOSETTINGS.getSfxVolume());
-                    action.run();
-                }
+            if (action != null) {
+                sfx.play(AUDIOSETTINGS.getEffectiveSfxVolume());
+                action.run();
+            }
             }
         });
 

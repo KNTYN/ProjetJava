@@ -13,7 +13,7 @@ public class MainMenu extends Menu {
     @Override
     protected void build() {
         setBackground("background/BG_MainMenu.png");
-        addMainTitle();
+        //addMainTitle();
 
         // remplacer les - 50 par  - 1/2 de width de la texture
         // Il faut que toutes les valeurs dependent de width et height
