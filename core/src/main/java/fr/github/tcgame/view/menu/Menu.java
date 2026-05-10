@@ -200,6 +200,11 @@ public abstract class Menu {
 
     }
 
+    public void addButton(String texturePath, String textureAlt, float x, float y, float size, Runnable action, ButtonMode buttonMode) {
+        addButton(texturePath, textureAlt, x, y, size, action, buttonMode, "sfx/placeholder_button.mp3"); //placeholder
+
+    }
+
 
 
     public void keyIsPressed(int key, Runnable action) {
