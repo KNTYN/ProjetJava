@@ -12,12 +12,22 @@ import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
 import com.badlogic.gdx.utils.viewport.FitViewport;
 
+
+import java.util.Objects;
 import java.util.function.Consumer;
 
 import com.badlogic.gdx.utils.viewport.Viewport;
 import fr.github.tcgame.control.MenuController;
+import fr.github.tcgame.model.card.Card;
 
 import static fr.github.tcgame.view.MainGame.AUDIOSETTINGS;
+
+//QUENTIN
+import com.badlogic.gdx.scenes.scene2d.ui.ScrollPane;
+import com.badlogic.gdx.files.FileHandle;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
 
 public abstract class Menu {
@@ -34,6 +44,19 @@ public abstract class Menu {
     protected Table root;
     protected MenuController controller;
     protected com.badlogic.gdx.scenes.scene2d.ui.Skin skin;
+
+    //QUENTIN (permet de pas surcharger VRAM)
+    protected final java.util.List<Texture> loadedTextures = new java.util.ArrayList<>();
+    //Pour la bibliothèque
+    protected Table cardsTable;
+    protected ScrollPane cardsScrollPane;
+    protected List<FileHandle> currentCardFiles = new ArrayList<>();
+
+    protected float libraryCardWidth;
+    protected float libraryCardHeight;
+    protected float libraryGapX;
+    protected float libraryGapY;
+    protected int libraryCardsPerRow;
 
     public enum TypeMenu {SPLASH, MAIN, SELECTION, CARDLIST, SETTINGS, QUIT, GAME}
     public TypeMenu typeMenu;
@@ -75,6 +98,12 @@ public abstract class Menu {
     }
 
     public void dispose() {
+        //Quentin
+        for (Texture texture : loadedTextures) {
+            texture.dispose();
+        }
+        loadedTextures.clear();
+        //
         stage.dispose();
         this.skin.dispose();
         if (mainTitleTexture != null) {
@@ -89,6 +118,7 @@ public abstract class Menu {
         Image bg = new Image(texture);
         bg.setFillParent(true);
         stage.addActor(bg);
+        bg.toBack(); //J'ajoute ca pour que le background soit toujours au fond (Micka me frappe pas)
     }
 
 
@@ -198,6 +228,10 @@ public abstract class Menu {
         stage.addActor(slider);
     }
 
+
+    //QUENTIN
+    //  METHODES BIBLIOTHEQUE
+
     public void addSearch(float x, float y, float width, Consumer<String> onSearch){
         TextField.TextFieldStyle style = new TextField.TextFieldStyle();
 
@@ -231,9 +265,129 @@ public abstract class Menu {
             }
         });
 
-
-
+        stage.addActor(searchField);
+        searchField.toFront();
     }
+
+
+
+    public void addAllCards(String folderPath,
+                            float x,
+                            float y,
+                            float viewportWidth,
+                            float viewportHeight,
+                            float cardWidth,
+                            float cardHeight,
+                            float gapX,
+                            float gapY,
+                            int cardsPerRow) {
+
+        FileHandle rootFolder = Gdx.files.internal("assets/" + folderPath);
+
+        if (!rootFolder.exists() || !rootFolder.isDirectory()) {
+            System.out.println("Dossier de cartes introuvable : " + rootFolder.path());
+            return;
+        }
+
+        currentCardFiles.clear();
+        collectCardImages(rootFolder, currentCardFiles);
+        currentCardFiles.sort(Comparator.comparing(FileHandle::path));
+
+        libraryCardWidth = cardWidth;
+        libraryCardHeight = cardHeight;
+        libraryGapX = gapX;
+        libraryGapY = gapY;
+        libraryCardsPerRow = cardsPerRow;
+
+        cardsTable = new Table();
+        cardsTable.top().left();
+
+        ScrollPane.ScrollPaneStyle style = new ScrollPane.ScrollPaneStyle();
+        cardsScrollPane = new ScrollPane(cardsTable, style);
+
+        cardsScrollPane.setPosition(x, y);
+        cardsScrollPane.setSize(viewportWidth, viewportHeight);
+        cardsScrollPane.setScrollingDisabled(true, false);
+        cardsScrollPane.setForceScroll(false, true);
+        cardsScrollPane.setFadeScrollBars(false);
+        cardsScrollPane.setOverscroll(false, false);
+        cardsScrollPane.setScrollbarsVisible(true);
+
+        stage.addActor(cardsScrollPane);
+        cardsScrollPane.toFront();
+
+        stage.setScrollFocus(cardsScrollPane);
+
+        cardsScrollPane.addListener(new InputListener() {
+            @Override
+            public void enter(InputEvent event, float x, float y, int pointer, Actor fromActor) {
+                stage.setScrollFocus(cardsScrollPane);
+            }
+
+            @Override
+            public boolean scrolled(InputEvent event, float x, float y, float amountX, float amountY) {
+                cardsScrollPane.setScrollY(cardsScrollPane.getScrollY() + amountY * 80f);
+                return true;
+            }
+        });
+
+        refreshCards("");
+    }
+
+    private void collectCardImages(FileHandle folder, List<FileHandle> cardFiles) {
+        for (FileHandle file : folder.list()) {
+            if (file.isDirectory()) {
+                collectCardImages(file, cardFiles);
+            } else if (file.extension().equalsIgnoreCase("png")) {
+                cardFiles.add(file);
+            }
+        }
+    }
+
+    public void refreshCards(String query) {
+        if (cardsTable == null) {
+            return;
+        }
+
+        cardsTable.clearChildren();
+
+        String cleanQuery = query == null ? "" : query.toLowerCase().trim();
+
+        int displayedCards = 0;
+
+        for (FileHandle file : currentCardFiles) {
+            String cardName = file.nameWithoutExtension().toLowerCase();
+
+            if (!cleanQuery.isEmpty() && !cardName.contains(cleanQuery)) {
+                continue;
+            }
+
+            Texture texture = new Texture(file);
+            loadedTextures.add(texture);
+
+            Image cardImage = new Image(texture);
+
+            cardsTable.add(cardImage)
+                .width(libraryCardWidth)
+                .height(libraryCardHeight)
+                .padRight(libraryGapX)
+                .padBottom(libraryGapY);
+
+            displayedCards++;
+
+            if (displayedCards % libraryCardsPerRow == 0) {
+                cardsTable.row();
+            }
+        }
+
+        cardsTable.pack();
+
+        if (cardsScrollPane != null) {
+            cardsScrollPane.setScrollY(0);
+            cardsScrollPane.layout();
+        }
+    }
+
 
 
 

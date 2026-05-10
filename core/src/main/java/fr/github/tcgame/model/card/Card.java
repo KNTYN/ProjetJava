@@ -25,6 +25,7 @@ public class Card {
 
     private Zone zone;
 
+
     public Card(String name, Family family, int hp, int cost, int normalAtk, int specialAtk, int mana, String pathCardTexture) {
         this.name = name;
         this.family = family;
@@ -51,6 +52,9 @@ public class Card {
     public String toString() {
         return this.name;
     }
+
+    public Family getFamily() { return family; }
+    public String getName() { return name; }
 
     public Zone getZone() { return zone; }
     public void setZone(Zone zone) { this.zone = zone; }
