@@ -120,6 +120,7 @@ public class MenuController {
     }
 
     public void debug(){
+        System.out.println("debug");
         passed();
     }
 

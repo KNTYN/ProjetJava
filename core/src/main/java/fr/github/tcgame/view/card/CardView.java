@@ -3,6 +3,7 @@ package fr.github.tcgame.view.card;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.scenes.scene2d.InputEvent;
 import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.Touchable;
 import com.badlogic.gdx.scenes.scene2d.ui.ImageButton;
 import com.badlogic.gdx.scenes.scene2d.utils.ClickListener;
 import com.badlogic.gdx.scenes.scene2d.utils.TextureRegionDrawable;
@@ -19,8 +20,7 @@ public class CardView {
 
     private List<ImageButton> handCards = new ArrayList<>();
     private List<ImageButton> benchCards = new ArrayList<>();
-    private List<ImageButton> activeCards = new ArrayList<>(); // ← Nouvelle liste
-
+    private List<ImageButton> activeCards = new ArrayList<>();
 
     public CardView() {}
 
@@ -39,6 +39,16 @@ public class CardView {
         return stage;
     }
 
+    /**
+     * Permet d'activer ou de désactiver les clics sur TOUTES les cartes.
+     * Très utile pour le menu pause.
+     */
+    public void setTouchable(Touchable touchable) {
+        for (ImageButton card : handCards) card.setTouchable(touchable);
+        for (ImageButton card : benchCards) card.setTouchable(touchable);
+        for (ImageButton card : activeCards) card.setTouchable(touchable);
+    }
+
     public void clearHandCards() {
         for (ImageButton card : handCards) {
             card.remove();
@@ -53,7 +63,7 @@ public class CardView {
         benchCards.clear();
     }
 
-    public void clearActiveCards() { // ← Nouvelle méthode
+    public void clearActiveCards() {
         for (ImageButton card : activeCards) {
             card.remove();
         }
@@ -78,8 +88,11 @@ public class CardView {
         cardButton.addListener(new ClickListener() {
             @Override
             public void clicked(InputEvent event, float x, float y) {
-                System.out.println("✅ CARTE CLIQUÉE : " + card + " (zone: " + zone + ")");
-                setSelectedCard(card, playerOwner);
+                // On vérifie si le bouton est touchable (sécurité supplémentaire)
+                if (cardButton.getTouchable() == Touchable.enabled) {
+                    System.out.println("✅ CARTE CLIQUÉE : " + card + " (zone: " + zone + ")");
+                    setSelectedCard(card, playerOwner);
+                }
             }
         });
 

@@ -121,7 +121,7 @@ public abstract class Menu {
 
 
     public void addMainTitle() {
-        mainTitle.setPosition(WIDTH*0.005f, HEIGHT*0.05f);
+        mainTitle.setPosition(0, 100);
         mainTitle.setSize(WIDTH,HEIGHT);
         stage.addActor(mainTitle);
     }
