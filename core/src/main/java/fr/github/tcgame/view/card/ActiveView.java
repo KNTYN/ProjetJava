@@ -21,8 +21,8 @@ public class ActiveView {
         Card activeCard = (idP == 1) ? P1.getActiveCard() : P2.getActiveCard();
 
         if (activeCard != null) {
-            float x = 900; // Position centrale pour l'active
-            float y = 300;
+            float x = 1089; // Position centrale pour l'active
+            float y = 291;
             CARDV.displayCard(activeCard, idP, x, y, 150, 210, "active"); // ← flag "active"
         }
     }

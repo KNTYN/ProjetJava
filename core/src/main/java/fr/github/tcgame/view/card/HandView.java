@@ -23,7 +23,7 @@ public class HandView {
 
         for (int i = 0; i < hand.length; i++) {
             if (hand[i] != null) {
-                float x = 300 + (i * spacing);
+                float x = 500 + (i * spacing);
                 CARDV.displayCard(hand[i], idP, x, 75, 150, 210, "hand"); // ← "hand"
             }
         }

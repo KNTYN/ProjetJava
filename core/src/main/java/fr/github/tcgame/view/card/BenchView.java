@@ -23,7 +23,7 @@ public class BenchView {
 
         for (int i = 0; i < bench.length; i++) {
             if (bench[i] != null) {
-                float x = 300 + (i * spacing);
+                float x = 400 + (i * spacing);
                 float y = 300;
                 CARDV.displayCard(bench[i], idP, x, y, 150, 210, "bench"); // ← "bench"
             }
