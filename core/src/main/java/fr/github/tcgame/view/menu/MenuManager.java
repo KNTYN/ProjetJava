@@ -17,6 +17,7 @@ public class MenuManager {
     private QuitMenu quitMenu;
     private GameMenu gameMenu;
     private WinMenu winMenu;
+    private PauseMenu pauseMenu;
 
     public MenuManager(){}
 
@@ -37,6 +38,8 @@ public class MenuManager {
         settingsMenu.dispose();
         quitMenu.dispose();
         gameMenu.dispose();
+        winMenu.dispose();
+        pauseMenu.dispose();
     }
 
     public void initMenu() {
@@ -49,6 +52,7 @@ public class MenuManager {
         quitMenu = new QuitMenu(controller);
         gameMenu = new GameMenu(controller);
         winMenu = new WinMenu(controller);
+        pauseMenu = new PauseMenu(controller);
     }
 
     public void changeMenu(Menu.TypeMenu typeMenu) {
@@ -70,6 +74,7 @@ public class MenuManager {
             case GAME -> actualMenu = gameMenu;
 
             case WIN -> actualMenu = winMenu;
+            case PAUSE -> actualMenu = pauseMenu;
         }
         if (actualMenu != null) {
             Gdx.input.setInputProcessor(actualMenu.getStage());

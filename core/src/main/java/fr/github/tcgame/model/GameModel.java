@@ -45,8 +45,8 @@ public class GameModel {
     // INITIALISATION
     public void init() {
         this.deck.createDeck();
-        deck.draws(P1, 1);
-        deck.draws(P2, 1);
+        deck.draws(P1, 2);
+        deck.draws(P2, 2);
 
         System.out.println("P1 HAND : " + Arrays.toString(P1.getHand()));
         System.out.println("P2 HAND : " + Arrays.toString(P2.getHand()));
@@ -63,13 +63,16 @@ public class GameModel {
 
         System.out.println("🔄 Tour " + TURN + " - C'est au tour du joueur " + playerTurn);
 
-
         Player currentPlayer = getPlayerTurn();
         if (playerTurn==1){
             this.deck.draws(currentPlayer, 1);
             currentPlayer.addMana(TURN >= 5 ? 2 : 1);
             currentPlayer.addPiece(1);
             HANDV1.displayHand(playerTurn);
+        } else {
+            this.deck.draws(currentPlayer, 1);
+            currentPlayer.addMana(TURN >= 5 ? 2 : 1);
+            currentPlayer.addPiece(1);
         }
 
         System.out.println("🃏 Pioche effectuée");
