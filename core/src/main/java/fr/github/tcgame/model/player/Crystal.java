@@ -3,7 +3,7 @@ package fr.github.tcgame.model.player;
 import fr.github.tcgame.view.player.CrystalView;
 
 public class Crystal {
-    final public static int MAX_HP=100;
+    final public static int MAX_HP=40;
     public int currentHp=MAX_HP;
     public int idPlayer;
 

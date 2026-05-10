@@ -20,6 +20,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 
 import static fr.github.tcgame.model.GameModel.*;
 
@@ -40,6 +42,7 @@ public class CardView {
     private final List<Card> alreadyAnimatedHandCards = new ArrayList<>();
     private final Map<Card, float[]> lastCardPositions = new HashMap<>();
     private final Map<Card, String> lastCardZones = new HashMap<>();
+    private final Set<Card> dyingCards = new HashSet<>();
 
     public CardView() {}
 
@@ -67,12 +70,27 @@ public class CardView {
     }
 
     private void clear(List<Group> list) {
+        List<Group> toRemove = new ArrayList<>();
+
         for (Group g : list) {
             Card card = (Card) g.getUserObject();
+
+            if (card != null && dyingCards.contains(card)) {
+                continue;
+            }
+
+            if (card != null && card.isDying()) {
+                animateDeath(card);
+                card.setDying(false);
+                continue;
+            }
+
             rememberCardPosition(g, card, (String) g.getName());
             g.remove();
+            toRemove.add(g);
         }
-        list.clear();
+
+        list.removeAll(toRemove);
     }
 
     private List<List<Group>> allLists() {
@@ -184,5 +202,69 @@ public class CardView {
         if (card == null || zone == null) return;
         lastCardPositions.put(card, new float[]{ g.getX(), g.getY() });
         lastCardZones.put(card, zone);
+    }
+
+    private void playDeathAnimation(Group g) {
+        g.setTouchable(Touchable.disabled);
+        g.clearActions();
+        g.toFront();
+
+        g.addAction(
+            Actions.sequence(
+                Actions.parallel(
+                    Actions.fadeOut(0.6f),
+                    Actions.scaleTo(0.15f, 0.15f, 0.6f, Interpolation.pow2Out),
+                    Actions.rotateBy(25f, 0.6f)
+                ),
+                Actions.removeActor()
+            )
+        );
+    }
+
+    public void animateDeath(Card card) {
+        Group g = findGroupByCard(card);
+
+        if (g == null) {
+            return;
+        }
+
+        dyingCards.add(card);
+
+        g.setTouchable(Touchable.disabled);
+        g.clearActions();
+        g.toFront();
+
+        g.addAction(
+            Actions.sequence(
+                Actions.parallel(
+                    Actions.fadeOut(0.6f),
+                    Actions.scaleTo(0.15f, 0.15f, 0.6f, Interpolation.pow2Out),
+                    Actions.rotateBy(25f, 0.6f)
+                ),
+                Actions.run(() -> {
+                    g.remove();
+                    removeGroupFromAllLists(g);
+                    dyingCards.remove(card);
+                })
+            )
+        );
+    }
+
+    private Group findGroupByCard(Card card) {
+        for (List<Group> list : allLists()) {
+            for (Group g : list) {
+                if (g.getUserObject() == card) {
+                    return g;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private void removeGroupFromAllLists(Group group) {
+        for (List<Group> list : allLists()) {
+            list.remove(group);
+        }
     }
 }

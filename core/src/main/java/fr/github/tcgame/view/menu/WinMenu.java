@@ -18,7 +18,6 @@ public class WinMenu extends Menu{
         addMainTitle();
 
         keyIsPressed(Input.Keys.ESCAPE, () ->{
-            controller.goMain();
             AUDIOSETTINGS.playMusic(AudioSettings.TypeMusic.MENU);
             WIN=false;
             // il faut reset le jeu

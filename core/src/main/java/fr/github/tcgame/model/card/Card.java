@@ -22,6 +22,8 @@ public class Card {
     private int specialAtk;
     private int mana;
 
+    private boolean dying = false;
+
     private Texture cardTexture; // on initie la texture dans le constructeur directement puis il sera récupérer dans le CardView
 
     public enum Zone { OFFF, HAND, BENCH, ACTIVE}
@@ -78,8 +80,13 @@ public class Card {
         return -1; // carte encore vivante
     }
     public void deathCard(){
+        this.dying = true;
         this.zone=Zone.OFFF;
         // reset completement de l'affichage
+    }
+
+    public void setDying(boolean dying) {
+        this.dying = dying;
     }
 
     public int getHp(){
@@ -88,5 +95,9 @@ public class Card {
 
     public void setMaxHp(){
         this.currentHp=this.hp;
+    }
+
+    public boolean isDying() {
+        return dying;
     }
 }
