@@ -23,7 +23,11 @@ public class ActiveView {
         if (activeCard != null) {
             float x = 1089; // Position centrale pour l'active
             float y = 291;
-            CARDV.displayCard(activeCard, idP, x, y, 150, 210, "active"); // ← flag "active"
+            if (idP == 1) {
+                CARDV.displayCard(activeCard, idP, x, y, 150, 210, "active");
+            } else {
+                CARDV.displayCard(activeCard, idP, x, y, 150, 510, "active");
+            }
         }
     }
 }
