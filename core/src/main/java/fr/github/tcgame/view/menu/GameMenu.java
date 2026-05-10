@@ -35,15 +35,15 @@ public class GameMenu extends Menu {
 
         addButton("button/attaque.png", "button/attaque_pressed.png", 1200, 300, 1f, () -> {
             if (playerTurn == 1) controller.attack(1);
-        }, ButtonMode.PRESSED);
+        }, ButtonMode.PRESSED,"sfx/Click_stereo.ogg.mp3");
 
         addButton("button/speciale.png", "button/speciale_pressed.png", 1200, 250, 1f, () -> {
             if (playerTurn == 1) controller.attackSpecial(1);
-        }, ButtonMode.PRESSED);
+        }, ButtonMode.PRESSED,"sfx/Click_stereo.ogg.mp3");
 
         addButton("button/passer.png", "button/passer_pressed.png", 1200, 200, 1f, () -> {
             if (playerTurn == 1) controller.passed();
-        }, ButtonMode.PRESSED);
+        }, ButtonMode.PRESSED,"sfx/Click_stereo.ogg.mp3");
 
         addCoinDisplay();
         addManaDisplay();
