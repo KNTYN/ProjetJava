@@ -168,7 +168,6 @@ public abstract class Menu {
                 @Override
                 public void clicked(InputEvent event, float x, float y) {
 
-
                     // Toggle la texture
                     toggled[0] = !toggled[0];
                     style.imageUp = toggled[0] ? altDrawable : normalDrawable;
