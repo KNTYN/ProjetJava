@@ -29,28 +29,28 @@ public class CardListMenu extends Menu {
             WIDTH - 900,
             800,
             1f,
-            () -> toggleFamilyFilter("capitalistes"));
+            () -> toggleFamilyFilter("capitalistes"),ButtonMode.TOGGLE);
 
         addButton("button/search/btn_goofy.png",
             "button/search/btn_goofy_pressed.png",
             WIDTH - 700,
             800,
             1f,
-            () -> toggleFamilyFilter("goofys"));
+            () -> toggleFamilyFilter("goofys"),ButtonMode.TOGGLE);
 
         addButton("button/search/btn_maudit.png",
             "button/search/btn_maudit_pressed.png",
             WIDTH - 500,
             800,
             1f,
-            () -> toggleFamilyFilter("maudits"));
+            () -> toggleFamilyFilter("maudits"),ButtonMode.TOGGLE);
 
         addButton("button/search/btn_prodige.png",
             "button/search/btn_prodige_pressed.png",
             WIDTH - 300,
             800,
             1f,
-            () -> toggleFamilyFilter("prodiges"));
+            () -> toggleFamilyFilter("prodiges"),ButtonMode.TOGGLE);
 
 
         addAllCards(
