@@ -4,9 +4,9 @@ import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.audio.Music;
 
 public class AudioSettings {
-    private float globalVolume = 0.5f;
-    private float sfxVolume = 0.5f;
-    private float musicVolume = 0.5f;
+    private float globalVolume = 0.2f;
+    private float sfxVolume = 0.3f;
+    private float musicVolume = 0.1f;
 
     public Music musicMenu;
     public Music musicGame;

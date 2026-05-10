@@ -1,6 +1,7 @@
 package fr.github.tcgame.view.menu;
 
 import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.audio.Sound;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
@@ -33,7 +34,7 @@ public abstract class Menu {
     public static final float HEIGHT = 1080; // 720
 
     private Texture mainTitleTexture;
-    private Image mainTitle;
+    protected Image mainTitle;
 
     protected Group overlay;
     protected Stage stage;
@@ -166,7 +167,7 @@ public abstract class Menu {
             button.addListener(new ClickListener() {
                 @Override
                 public void clicked(InputEvent event, float x, float y) {
-                    sfx.play(AUDIOSETTINGS.getEffectiveSfxVolume());
+
 
                     // Toggle la texture
                     toggled[0] = !toggled[0];
@@ -175,6 +176,7 @@ public abstract class Menu {
 
                     // Exécuter l'action
                     if (action != null) {
+                        sfx.play(AUDIOSETTINGS.getEffectiveSfxVolume());
                         action.run();
                     }
                 }
@@ -196,13 +198,12 @@ public abstract class Menu {
 
     // Versions simplifiées
     public void addButton(String texturePath, String textureAlt, float x, float y, float size, Runnable action) {
-        addButton(texturePath, textureAlt, x, y, size, action, ButtonMode.HOVER, "sfx/placeholder_button.mp3"); //placeholder
+        addButton(texturePath, textureAlt, x, y, size, action, ButtonMode.HOVER, "sfx/Click_stereo.ogg.mp3"); //placeholder
 
     }
 
     public void addButton(String texturePath, String textureAlt, float x, float y, float size, Runnable action, ButtonMode buttonMode) {
-        addButton(texturePath, textureAlt, x, y, size, action, buttonMode, "sfx/placeholder_button.mp3"); //placeholder
-
+        addButton(texturePath, textureAlt, x, y, size, action, buttonMode, "sfx/Click_stereo.ogg.mp3"); //placeholder
     }
 
 
@@ -221,16 +222,22 @@ public abstract class Menu {
     }
 
     public void addSplash(Runnable action) {
+        Sound sfx = Gdx.audio.newSound(Gdx.files.internal("sfx/splash_sound.wav"));
+        Sound sfx2 = Gdx.audio.newSound(Gdx.files.internal("sfx/Titre - TastyCrousty Card Game.mp3"));
         stage.addListener(new InputListener() {
             @Override
             public boolean keyDown(InputEvent event, int keycode) {
                 action.run();
+                sfx.play(AUDIOSETTINGS.getEffectiveSfxVolume()*6f);
+                sfx2.play(AUDIOSETTINGS.getEffectiveSfxVolume()*3f);
                 return true;
             }
 
             @Override
             public boolean touchDown(InputEvent event, float x, float y, int pointer, int button) {
                 action.run();
+                sfx.play(AUDIOSETTINGS.getEffectiveSfxVolume()*6f);
+                sfx2.play(AUDIOSETTINGS.getEffectiveSfxVolume()*3f);
                 return true;
             }
         });

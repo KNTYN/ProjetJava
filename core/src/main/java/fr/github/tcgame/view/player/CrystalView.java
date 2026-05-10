@@ -35,17 +35,18 @@ public class CrystalView {
         }
 
         // Position selon le joueur
-        float x = (idP == 1) ? 100 : 1300;
-        float y = (idP == 1) ? 400 : 400;
+        float x = (idP == 1) ? 20 : 1650;
+        float y = (idP == 1) ? 275 : 775;
 
         // Texture selon les HP (10 états : 100→90→...→0)
-        int step = Math.min(9, (100 - hp) / 10); // 0 = plein, 9 = mort
+        int step = Math.max(9, (100 - hp) / 10); // 0 = plein, 9 = mort
         String path = "crystal/crystal__000" + step + "_crystal_1.png";
 
         // Image du cristal
         Image crystal = new Image(new TextureRegionDrawable(new Texture(path)));
         crystal.setPosition(x, y);
         crystal.setTouchable(Touchable.disabled);
+        crystal.setSize(100,100);
 
 
         // Label HP

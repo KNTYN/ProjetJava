@@ -69,14 +69,24 @@ public class Card {
     public int getManaCost() { return this.mana; }
 
     public int getDamage(int dmg) {
-        int absorbed = min(dmg, this.hp); // dégâts que la carte absorbe
-        this.hp = max(0, this.hp - dmg);
-        if (this.hp == 0) { deathCard(); }
-        return dmg - absorbed; // surplus transmis au cristal
+        int absorbed = min(dmg, this.currentHp);
+        this.currentHp = max(0, this.currentHp - dmg);
+        if (this.currentHp == 0) {
+            deathCard();
+            return dmg - absorbed; // surplus >= 0
+        }
+        return -1; // carte encore vivante
     }
-
     public void deathCard(){
         this.zone=Zone.OFFF;
         // reset completement de l'affichage
+    }
+
+    public int getHp(){
+        return this.currentHp;
+    }
+
+    public void setMaxHp(){
+        this.currentHp=this.hp;
     }
 }

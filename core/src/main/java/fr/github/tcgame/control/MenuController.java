@@ -95,7 +95,8 @@ public class MenuController {
         // Si la victime a une carte active, elle absorbe les dégâts en premier
         if (victim.activeCard != null) {
             int overflow = victim.activeCard.getDamage(dmg);
-            if (overflow > 0) {
+            if (overflow >= 0) {
+                attacker.addPiece(2);
                 victim.takeDamage(overflow); // surplus au cristal
                 // La carte est morte, on la retire
                 victim.removeActiveCard();
@@ -123,7 +124,8 @@ public class MenuController {
 
         if (victim.activeCard != null) {
             int overflow = victim.activeCard.getDamage(dmg);
-            if (overflow > 0) {
+            if (overflow>=0){
+                attacker.addPiece(2);
                 victim.takeDamage(overflow);
                 victim.removeActiveCard();
                 refreshViews(idP == 1 ? 2 : 1);

@@ -7,6 +7,7 @@ import fr.github.tcgame.view.card.HandView;
 
 import static fr.github.tcgame.model.GameModel.MAX_CARD_BENCH;
 import static fr.github.tcgame.model.GameModel.MAX_CARD_HAND;
+import static fr.github.tcgame.view.MainGame.AUDIOSETTINGS;
 import static java.lang.Math.max;
 
 public class Player {
@@ -88,6 +89,7 @@ public class Player {
     }
 
     public void removeActiveCard() {
+        this.activeCard.setMaxHp();
         this.activeCard = null;
     }
 
@@ -181,6 +183,12 @@ public class Player {
     }
 
     public void errorEvent() {
+        /*
+        com.badlogic.gdx.Gdx.audio.newSound(
+            com.badlogic.gdx.Gdx.files.internal("sfx/placeholder_button.mp3")
+        ).play(AUDIOSETTINGS.getEffectiveSfxVolume()*6f);
+
+         */
         System.out.println("[Debug] - Vous ne pouvez pas faire ça !");
     }
 
