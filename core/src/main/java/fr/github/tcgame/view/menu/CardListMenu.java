@@ -12,24 +12,59 @@ public class CardListMenu extends Menu {
     @Override
     protected void build() {
         setBackground("background/BG_biblio.png");
-        addButton("button/arrow_return.png", "button/arrow_return_gold.png", 50, 890, 1.5f, controller::goMain);
+
+        addButton(
+            "button/arrow_return.png",
+            "button/arrow_return_gold.png",
+            50,
+            890,
+            1.5f,
+            controller::goMain
+        );
+
+        addSearch(WIDTH / 2f - 700, 825, 540, this::refreshCards);
+
+        addButton("button/search/btn_capitalist.png",
+            "button/search/btn_capitalist_pressed.png",
+            WIDTH - 900,
+            800,
+            1f,
+            () -> toggleFamilyFilter("capitalistes"));
+
+        addButton("button/search/btn_goofy.png",
+            "button/search/btn_goofy_pressed.png",
+            WIDTH - 700,
+            800,
+            1f,
+            () -> toggleFamilyFilter("goofys"));
+
+        addButton("button/search/btn_maudit.png",
+            "button/search/btn_maudit_pressed.png",
+            WIDTH - 500,
+            800,
+            1f,
+            () -> toggleFamilyFilter("maudits"));
+
+        addButton("button/search/btn_prodige.png",
+            "button/search/btn_prodige_pressed.png",
+            WIDTH - 300,
+            800,
+            1f,
+            () -> toggleFamilyFilter("prodiges"));
 
 
         addAllCards(
             "cards",
             250,
-            100,
+            80,
             1450,
-            620,
+            700,
             150,
             220,
             65,
             70,
             7
         );
-        // barre de recherche
-        // + les 4 boutons
-
 
         keyIsPressed(Input.Keys.ESCAPE, controller::goMain);
     }

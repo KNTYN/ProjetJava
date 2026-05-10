@@ -51,6 +51,7 @@ public abstract class Menu {
     protected Table cardsTable;
     protected ScrollPane cardsScrollPane;
     protected List<FileHandle> currentCardFiles = new ArrayList<>();
+    protected final List<String> currentFamilyFilters = new ArrayList<>();
 
     protected float libraryCardWidth;
     protected float libraryCardHeight;
@@ -391,8 +392,12 @@ public abstract class Menu {
 
         for (FileHandle file : currentCardFiles) {
             String cardName = file.nameWithoutExtension().toLowerCase();
+            String familyName = file.parent().name().toLowerCase();
 
-            if (!cleanQuery.isEmpty() && !cardName.contains(cleanQuery)) {
+            boolean matchesSearch = cleanQuery.isEmpty() || cardName.contains(cleanQuery);
+            boolean matchesFamily = currentFamilyFilters.isEmpty() || currentFamilyFilters.contains(familyName);
+
+            if (!matchesSearch || !matchesFamily) {
                 continue;
             }
 
@@ -420,6 +425,22 @@ public abstract class Menu {
             cardsScrollPane.setScrollY(0);
             cardsScrollPane.layout();
         }
+    }
+
+    public void toggleFamilyFilter(String familyName) {
+        if (familyName == null) {
+            return;
+        }
+
+        String cleanFamilyName = familyName.toLowerCase().trim();
+
+        if (currentFamilyFilters.contains(cleanFamilyName)) {
+            currentFamilyFilters.remove(cleanFamilyName);
+        } else {
+            currentFamilyFilters.add(cleanFamilyName);
+        }
+
+        refreshCards("");
     }
 
 
