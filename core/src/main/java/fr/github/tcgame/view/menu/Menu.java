@@ -3,6 +3,7 @@ package fr.github.tcgame.view.menu;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.OrthographicCamera;
 import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.TextureRegion;
 import com.badlogic.gdx.scenes.scene2d.*;
 import com.badlogic.gdx.scenes.scene2d.ui.*;
@@ -196,6 +197,44 @@ public abstract class Menu {
         });
         stage.addActor(slider);
     }
+
+    public void addSearch(float x, float y, float width, Consumer<String> onSearch){
+        TextField.TextFieldStyle style = new TextField.TextFieldStyle();
+
+        Texture texBg = new Texture(Gdx.files.internal("button/search/searchbar_bg_native.png"));
+        Texture texFocused = new Texture(Gdx.files.internal("button/search/searchbar_bg_focused.png"));
+        Texture texCursor = new Texture(Gdx.files.internal("button/search/cursor.png"));
+
+        float height = texBg.getHeight();
+
+        style.font = new BitmapFont(Gdx.files.internal("ui/PixelGameFont_24.fnt"));
+        style.fontColor = com.badlogic.gdx.graphics.Color.WHITE;
+        style.focusedFontColor= com.badlogic.gdx.graphics.Color.valueOf("C8A84B");
+
+        style.background = new TextureRegionDrawable(new TextureRegion(texBg));
+        style.focusedBackground = new TextureRegionDrawable(new TextureRegion(texFocused));
+
+        style.cursor = new TextureRegionDrawable((new TextureRegion(texCursor)));
+        style.selection = skin.newDrawable("white", new com.badlogic.gdx.graphics.Color(0.55f, 0.42f, 0.18f, 0.45f));
+
+        TextField searchField = new TextField("", style);
+        searchField.setMessageText("Rechercher une carte...");
+        searchField.setPosition(x, y);
+        searchField.setSize(width,height);
+
+        searchField.addListener(new ChangeListener() {
+            @Override
+            public void changed(ChangeEvent event, Actor actor) {
+                if (onSearch!=null){
+                    onSearch.accept(searchField.getText().toLowerCase().trim());
+                }
+            }
+        });
+
+
+
+    }
+
 
 
 }
