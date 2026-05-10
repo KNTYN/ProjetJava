@@ -31,45 +31,41 @@ public class GameMenu extends Menu{
             controller.deployToActive(1);
         });
 
-        addCoinDisplay();
+        addButton("button/attaque.png", "button/attaque_pressed.png", 1200, 300, 1f,() -> {
 
+        }, ButtonMode.PRESSED);
+
+        addCoinDisplay();
         CARDV.setStage(stage);
 
         keyIsPressed(Input.Keys.ESCAPE, () -> {
             System.out.println("Debug Touch");
         });
     }
-    private void addCoinDisplay() {
-        // Créer une table pour aligner icône + texte
-        Table coinTable = new Table();
-        coinTable.setPosition(50, HEIGHT - 100); // En haut à gauche
 
-        // Icône de pièce
+    private void addCoinDisplay() {
+
+        Table coinTable = new Table();
+        coinTable.setPosition(50, 200);
+
         Texture coinTexture = new Texture("items/coin.png");
         Image coinIcon = new Image(coinTexture);
         coinIcon.setSize(40, 40);
 
-        // Label pour le nombre
         Label.LabelStyle labelStyle = new Label.LabelStyle();
         labelStyle.font = new BitmapFont(); // Police par défaut
         labelStyle.font.getData().setScale(2f);
 
-        coinLabel = new Label("" + P1.piece, labelStyle);
+        coinLabel = new Label("x" + P1.piece, labelStyle);
 
-        // Aligner icône + texte horizontalement
         coinTable.add(coinIcon).size(40, 40).padRight(10);
         coinTable.add(coinLabel);
-
         stage.addActor(coinTable);
     }
 
     @Override
     public void draw() {
-        // Mettre à jour le texte des pièces à chaque frame
-        if (coinLabel != null) {
-            coinLabel.setText("" + P1.piece);
-        }
-
+        if (coinLabel != null) { coinLabel.setText("x" + P1.piece); }
         super.draw();
     }
 }

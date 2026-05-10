@@ -129,38 +129,72 @@ public abstract class Menu {
         stage.addActor(mainTitle);
     }
 
-    public void addButton(String texturePath, String texturePathHover,
-                          float x, float y, float size, Runnable action) {
+    public enum ButtonMode {
+        HOVER,      // Image change au survol
+        PRESSED,    // Image change au clic (maintenu)
+        TOGGLE      // Toggle entre les deux textures à chaque clic
+    }
 
+    public void addButton(String texturePath, String textureAlt, float x, float y, float size, Runnable action, ButtonMode mode) {
         Texture normalTex = new Texture(Gdx.files.internal(texturePath));
-        Texture hoverTex = new Texture(Gdx.files.internal(texturePathHover));
+        Texture altTex = new Texture(Gdx.files.internal(textureAlt));
 
         TextureRegionDrawable normalDrawable = new TextureRegionDrawable(new TextureRegion(normalTex));
-        TextureRegionDrawable hoverDrawable = new TextureRegionDrawable(new TextureRegion(hoverTex));
+        TextureRegionDrawable altDrawable = new TextureRegionDrawable(new TextureRegion(altTex));
 
         ImageButton.ImageButtonStyle style = new ImageButton.ImageButtonStyle();
         style.imageUp = normalDrawable;
-        style.imageOver = hoverDrawable;
+
+        switch (mode) {
+            case HOVER -> style.imageOver = altDrawable;
+            case PRESSED -> style.imageDown = altDrawable;
+            case TOGGLE -> {} // Pas de style, on gère manuellement
+        }
 
         ImageButton button = new ImageButton(style);
-
         button.setPosition(x, y);
         button.setSize(normalTex.getWidth() * size, normalTex.getHeight() * size);
 
-        com.badlogic.gdx.audio.Sound sfx =
-            Gdx.audio.newSound(Gdx.files.internal("sfx/placeholder_button.mp3"));
+        com.badlogic.gdx.audio.Sound sfx = Gdx.audio.newSound(Gdx.files.internal("sfx/placeholder_button.mp3"));
 
-        button.addListener(new ClickListener() {
-            @Override
-            public void clicked(InputEvent event, float x, float y) {
-            if (action != null) {
-                sfx.play(AUDIOSETTINGS.getEffectiveSfxVolume());
-                action.run();
-            }
-            }
-        });
+        if (mode == ButtonMode.TOGGLE) {
+            // État de toggle
+            final boolean[] toggled = {false};
+
+            button.addListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    sfx.play(AUDIOSETTINGS.getEffectiveSfxVolume());
+
+                    // Toggle la texture
+                    toggled[0] = !toggled[0];
+                    style.imageUp = toggled[0] ? altDrawable : normalDrawable;
+                    button.setStyle(style);
+
+                    // Exécuter l'action
+                    if (action != null) {
+                        action.run();
+                    }
+                }
+            });
+        } else {
+            button.addListener(new ClickListener() {
+                @Override
+                public void clicked(InputEvent event, float x, float y) {
+                    if (action != null) {
+                        sfx.play(AUDIOSETTINGS.getEffectiveSfxVolume());
+                        action.run();
+                    }
+                }
+            });
+        }
 
         stage.addActor(button);
+    }
+
+    // Versions simplifiées
+    public void addButton(String texturePath, String textureAlt, float x, float y, float size, Runnable action) {
+        addButton(texturePath, textureAlt, x, y, size, action, ButtonMode.HOVER);
     }
 
 

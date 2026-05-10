@@ -12,7 +12,9 @@ import static fr.github.tcgame.model.GameModel.MAX_CARD_HAND;
 import static java.lang.Math.max;
 
 public class Player {
-    private Crystal crystal;
+    private boolean win=false;
+
+    public Crystal crystal;
 
     public static HandView HANDV1 = new HandView();
     public static BenchView BENCHV1 = new BenchView();
@@ -168,5 +170,11 @@ public class Player {
 
     public boolean checkDeath(){
         return this.crystal.currentHp==0;
+    }
+
+    public void checkVictory(){
+        if (checkDeath()){
+            this.win=true;
+        }
     }
 }
